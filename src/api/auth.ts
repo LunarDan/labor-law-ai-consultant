@@ -4,12 +4,18 @@ import type {
   LoginResponse,
   VerifyCodeRequest,
   ResetPasswordRequest,
-  UserInfo
+  RefreshTokenResponse,
+  UserInfo,
 } from '@/types'
 
 // 登录
 export const login = (data: LoginForm): Promise<LoginResponse> => {
   return request.post('/auth/login', data)
+}
+
+// 刷新 Token
+export const refreshToken = (refreshToken: string): Promise<RefreshTokenResponse> => {
+  return request.post('/auth/refresh', { refreshToken })
 }
 
 // 注册
@@ -31,4 +37,3 @@ export const getVerifyCode = (data: VerifyCodeRequest): Promise<void> => {
 export const resetPassword = (data: ResetPasswordRequest): Promise<void> => {
   return request.post('/auth/reset-password', data)
 }
-

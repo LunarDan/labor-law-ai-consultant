@@ -13,8 +13,9 @@ export interface UserInfo {
 // 登录表单
 export interface LoginForm {
   userType: UserType
-  username: string
+  phone: string
   password: string
+  rememberMe?: boolean
 }
 
 // 忘记密码表单
@@ -44,9 +45,15 @@ export interface ApiResponse<T = any> {
   data: T
 }
 
-// 登录响应
+// 登录响应（双 Token）
 export interface LoginResponse {
-  token: string
+  accessToken: string
+  refreshToken: string
   userInfo: UserInfo
 }
 
+// 刷新 Token 响应
+export interface RefreshTokenResponse {
+  accessToken: string
+  refreshToken?: string // 可选：后端可能返回新的 refreshToken
+}
