@@ -30,7 +30,8 @@ request.interceptors.request.use(
 // 响应拦截器
 request.interceptors.response.use(
   (response: AxiosResponse) => {
-    return response.data
+    // 返回data字段中的实际数据
+    return response.data.data || response.data
   },
   async (error) => {
     const originalRequest = error.config
@@ -71,12 +72,14 @@ request.interceptors.response.use(
     isRefreshing = true
 
     try {
-      // 调用刷新接口
-      const response = await axios.post(`${request.defaults.baseURL}/auth/refresh`, {
-        refreshToken,
+      // 调用刷新接口 - 使用GET方法，refreshToken作为query参数
+      const response = await axios.get(`${request.defaults.baseURL}/user/refresh-token`, {
+        params: { refreshToken },
       })
 
-      const { accessToken, refreshToken: newRefreshToken } = response.data
+      // 处理后端返回的data嵌套结构
+      const data = response.data.data || response.data
+      const { accessToken, refreshToken: newRefreshToken } = data
 
       // 更新 token
       localStorage.setItem('token', accessToken)

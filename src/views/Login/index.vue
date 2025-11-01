@@ -5,15 +5,15 @@
       <div class="user-type-tabs">
         <div
           class="tab-item"
-          :class="{ active: form.userType === 'personal' }"
-          @click="form.userType = 'personal'"
+          :class="{ active: form.userType === '1' }"
+          @click="form.userType = '1'"
         >
           个人用户登录
         </div>
         <div
           class="tab-item"
-          :class="{ active: form.userType === 'enterprise' }"
-          @click="form.userType = 'enterprise'"
+          :class="{ active: form.userType === '2' }"
+          @click="form.userType = '2'"
         >
           企业账号登录
         </div>
@@ -49,10 +49,6 @@
           <el-button type="primary" :loading="loading" style="width: 100%" @click="handleLogin">
             登录/注册
           </el-button>
-        </el-form-item>
-
-        <el-form-item>
-          <el-checkbox v-model="form.rememberMe" label="记住我的登录状态" />
         </el-form-item>
       </el-form>
     </el-card>
@@ -93,10 +89,10 @@ const PhoneIcon = markRaw(Phone)
 const LockIcon = markRaw(Lock)
 
 const form = reactive<LoginForm>({
-  userType: 'personal',
   phone: '',
   password: '',
-  rememberMe: false,
+  userType: '1',
+  clientId: 'web:chrome_1a2b3c4d',
 })
 
 // 表单验证规则
@@ -104,8 +100,8 @@ const rules = reactive<FormRules<LoginForm>>({
   phone: [
     { required: true, message: '请输入手机号', trigger: 'blur' },
     {
-      pattern: /^1[3-9]\d{9}$/,
-      message: '请输入正确的手机号码',
+      pattern: /^1\d{10}$/,
+      message: '请输入11位手机号码',
       trigger: 'blur',
     },
   ],
@@ -118,7 +114,7 @@ const rules = reactive<FormRules<LoginForm>>({
 // 页面加载时，检查路由参数中是否有用户类型
 onMounted(() => {
   const typeFromQuery = route.query.type as UserType
-  if (typeFromQuery === 'personal' || typeFromQuery === 'enterprise') {
+  if (typeFromQuery === '1' || typeFromQuery === '2') {
     form.userType = typeFromQuery
   }
 })
@@ -141,10 +137,11 @@ const handleLogin = async () => {
       authStore.setRefreshToken(res.refreshToken)
       authStore.setUserInfo(res.userInfo)
       authStore.setUserType(form.userType)
-      authStore.setRememberMe(form.rememberMe || false)
 
       ElMessage.success('登录成功')
-      router.push('/home')
+
+      // 强制刷新页面到home，确保路由守卫使用最新的登录状态
+      window.location.href = '/home'
     } catch (error) {
       ElMessage.error('登录失败，请检查手机号和密码')
     } finally {

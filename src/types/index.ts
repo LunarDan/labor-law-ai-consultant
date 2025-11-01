@@ -1,5 +1,5 @@
-// 用户类型
-export type UserType = 'personal' | 'enterprise'
+// 用户类型 (1代表个人用户, 2代表企业用户)
+export type UserType = '1' | '2'
 
 // 用户信息
 export interface UserInfo {
@@ -12,16 +12,16 @@ export interface UserInfo {
 
 // 登录表单
 export interface LoginForm {
-  userType: UserType
   phone: string
   password: string
-  rememberMe?: boolean
+  userType: UserType
+  clientId: string
 }
 
 // 忘记密码表单
 export interface ForgotPasswordForm {
   phone: string
-  code: string
+  verifyCode: string
   newPassword: string
   confirmPassword: string
 }
@@ -31,10 +31,17 @@ export interface VerifyCodeRequest {
   phone: string
 }
 
-// 重置密码请求
+// 重置密码请求（忘记密码）
 export interface ResetPasswordRequest {
   phone: string
-  code: string
+  verifyCode: string
+  newPassword: string
+}
+
+// 修改密码请求
+export interface ChangePasswordRequest {
+  userId: string
+  oldPassword: string
   newPassword: string
 }
 

@@ -7,5 +7,6 @@
 <style scoped lang="scss">
 .home-container {
   min-height: 100vh;
+  background: #f5f7fa;
 }
 </style>

@@ -6,8 +6,7 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string>(localStorage.getItem('token') || '')
   const refreshToken = ref<string>(localStorage.getItem('refreshToken') || '')
   const userInfo = ref<UserInfo | null>(null)
-  const userType = ref<UserType>((localStorage.getItem('userType') as UserType) || 'personal')
-  const rememberMe = ref<boolean>(localStorage.getItem('rememberMe') === 'true')
+  const userType = ref<UserType>((localStorage.getItem('userType') as UserType) || '1')
 
   const isLoggedIn = computed(() => !!token.value)
 
@@ -30,27 +29,14 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('userType', type)
   }
 
-  function setRememberMe(remember: boolean) {
-    rememberMe.value = remember
-    localStorage.setItem('rememberMe', String(remember))
-
-    if (!remember) {
-      // 如果不记住登录状态，清除相关信息
-      localStorage.removeItem('token')
-      localStorage.removeItem('refreshToken')
-      localStorage.removeItem('userType')
-    }
-  }
-
   function logout() {
     token.value = ''
     refreshToken.value = ''
     userInfo.value = null
-    userType.value = 'personal'
+    userType.value = '1'
     localStorage.removeItem('token')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('userType')
-    localStorage.removeItem('rememberMe')
   }
 
   return {
@@ -58,13 +44,11 @@ export const useAuthStore = defineStore('auth', () => {
     refreshToken,
     userInfo,
     userType,
-    rememberMe,
     isLoggedIn,
     setToken,
     setRefreshToken,
     setUserInfo,
     setUserType,
-    setRememberMe,
     logout,
   }
 })

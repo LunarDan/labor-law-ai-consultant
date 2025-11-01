@@ -8,12 +8,7 @@
       </template>
 
       <div class="button-row">
-        <el-button
-          type="primary"
-          size="large"
-          class="user-type-btn"
-          @click="selectUserType('personal')"
-        >
+        <el-button type="primary" size="large" class="user-type-btn" @click="selectUserType('1')">
           <el-icon :size="20" style="margin-right: 8px">
             <component :is="UserIcon" />
           </el-icon>
@@ -25,7 +20,7 @@
           size="large"
           plain
           class="user-type-btn"
-          @click="selectUserType('enterprise')"
+          @click="selectUserType('2')"
         >
           <el-icon :size="20" style="margin-right: 8px">
             <component :is="OfficeBuildingIcon" />

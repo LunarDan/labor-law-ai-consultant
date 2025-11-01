@@ -37,10 +37,10 @@
             :prefix-icon="LockIcon"
           />
         </el-form-item>
-        <el-form-item label="验证码" prop="code">
+        <el-form-item label="验证码" prop="verifyCode">
           <div class="code-wrapper">
             <el-input
-              v-model="form.code"
+              v-model="form.verifyCode"
               placeholder="请输入验证码"
               clearable
               :prefix-icon="MessageIcon"
@@ -109,7 +109,7 @@ const MessageIcon = markRaw(Message)
 
 const form = reactive<ForgotPasswordForm>({
   phone: '',
-  code: '',
+  verifyCode: '',
   newPassword: '',
   confirmPassword: '',
 })
@@ -135,7 +135,7 @@ const rules = reactive<FormRules<ForgotPasswordForm>>({
       trigger: 'blur',
     },
   ],
-  code: [
+  verifyCode: [
     { required: true, message: '请输入验证码', trigger: 'blur' },
     { len: 6, message: '验证码为6位数字', trigger: 'blur' },
   ],
@@ -188,7 +188,7 @@ const handleResetPassword = async () => {
   if (!forgotFormRef.value) return
 
   // 检查必填项
-  if (!form.phone || !form.code || !form.newPassword || !form.confirmPassword) {
+  if (!form.phone || !form.verifyCode || !form.newPassword || !form.confirmPassword) {
     ElMessage.error('修改失败')
     return
   }
@@ -216,7 +216,7 @@ const handleResetPassword = async () => {
     try {
       await resetPassword({
         phone: form.phone,
-        code: form.code,
+        verifyCode: form.verifyCode,
         newPassword: form.newPassword,
       })
       // 修改成功，跳转到登录页并显示成功提示
@@ -228,7 +228,7 @@ const handleResetPassword = async () => {
     } catch (error: any) {
       // 根据错误信息判断是验证码错误还是其他错误
       const errorMsg = error?.response?.data?.message || ''
-      if (errorMsg.includes('验证码') || errorMsg.includes('code')) {
+      if (errorMsg.includes('验证码') || errorMsg.includes('verifyCode')) {
         ElMessage.error('验证码错误，请重试')
       } else {
         ElMessage.error('修改失败')

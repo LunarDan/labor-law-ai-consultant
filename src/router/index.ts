@@ -41,12 +41,8 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
 
-  // 如果访问登录选择页或登录页且已登录并且记住了登录状态，直接跳转到主页-AI咨询
-  if (
-    (to.path === '/login-before' || to.path === '/login') &&
-    authStore.isLoggedIn &&
-    authStore.rememberMe
-  ) {
+  // 如果访问登录选择页或登录页且已登录，直接跳转到主页
+  if ((to.path === '/login-before' || to.path === '/login') && authStore.isLoggedIn) {
     next('/home')
     return
   }
