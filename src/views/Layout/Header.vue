@@ -115,6 +115,7 @@
 import { ref, reactive, computed, nextTick, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { updateUsername, changePassword, logout as logoutApi } from '@/api/auth'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Edit, Lock, SwitchButton } from '@element-plus/icons-vue'
 import userAvatarImg from '@/assets/images/user.png'
@@ -161,9 +162,9 @@ const displayName = computed(() => {
   return authStore.userInfo?.username || authStore.userInfo?.phone || '用户'
 })
 
-// 用户ID（模拟六位数ID，实际应从后端获取）
+// 用户ID（6位数用户ID）
 const userId = computed(() => {
-  return authStore.userInfo?.id || '123456'
+  return authStore.userInfo?.userId || authStore.userInfo?.id || ''
 })
 
 // 头像首字母（备用，当图片加载失败时可以显示）
@@ -211,10 +212,24 @@ const handleLogout = () => {
     cancelButtonText: '取消',
     type: 'warning',
   })
-    .then(() => {
-      authStore.logout()
-      ElMessage.success('退出登录成功')
-      router.push('/login-before')
+    .then(async () => {
+      try {
+        // 调用后端登出 API
+        const refreshToken = authStore.refreshToken
+        if (refreshToken) {
+          await logoutApi(refreshToken)
+        }
+
+        // 清除本地存储
+        authStore.logout()
+        ElMessage.success('退出登录成功')
+        router.push('/login-before')
+      } catch (error) {
+        // 即使后端 API 调用失败，也要清除本地数据
+        authStore.logout()
+        ElMessage.success('退出登录成功')
+        router.push('/login-before')
+      }
     })
     .catch(() => {
       // 用户点击取消，不做任何操作
@@ -237,27 +252,48 @@ const handleNameSave = async () => {
     return
   }
 
+  if (!userId.value) {
+    ElMessage.error('用户信息不完整，请重新登录')
+    return
+  }
+
   try {
-    // TODO: 调用后端API更新用户名
-    // await updateUsername({ username: editableName.value })
+    // 调用后端API更新用户名
+    await updateUsername({
+      userId: userId.value,
+      newUsername: editableName.value,
+    })
 
     // 更新本地store
     if (authStore.userInfo) {
-      authStore.userInfo.username = editableName.value
+      authStore.setUserInfo({
+        ...authStore.userInfo,
+        username: editableName.value,
+      })
     }
 
     ElMessage.success('用户名修改成功')
     isEditingName.value = false
-  } catch (error) {
-    ElMessage.error('用户名修改失败')
+
+    // 确保下次编辑时能获取到最新的用户名
+    await nextTick()
+  } catch (error: any) {
+    const errorMsg = error?.response?.data?.message || '用户名修改失败'
+    ElMessage.error(errorMsg)
   }
 }
 
 // 用户名输入框失焦
 const handleNameBlur = () => {
-  if (editableName.value.trim() && editableName.value !== displayName.value) {
+  if (!editableName.value.trim()) {
+    // 如果为空，取消编辑并恢复原值
+    isEditingName.value = false
+    editableName.value = displayName.value
+  } else if (editableName.value !== displayName.value) {
+    // 如果有修改，则保存
     handleNameSave()
   } else {
+    // 如果没有修改，直接退出编辑模式
     isEditingName.value = false
   }
 }
@@ -272,23 +308,32 @@ const handlePasswordSubmit = async () => {
 
     passwordLoading.value = true
     try {
-      // TODO: 调用后端API修改密码
-      // await changePassword({
-      //   oldPassword: passwordForm.oldPassword,
-      //   newPassword: passwordForm.newPassword
-      // })
+      // 检查 userId 是否存在
+      if (!userId.value) {
+        ElMessage.error('用户信息不完整，请重新登录')
+        return
+      }
 
-      // 模拟API调用
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // 调用后端API修改密码
+      await changePassword({
+        userId: userId.value,
+        oldPassword: passwordForm.oldPassword,
+        newPassword: passwordForm.newPassword,
+      })
 
-      // 假设后端验证成功
-      ElMessage.success('密码修改成功')
+      ElMessage.success('密码修改成功，请重新登录')
       showPasswordDialog.value = false
 
       // 重置表单
       passwordForm.oldPassword = ''
       passwordForm.newPassword = ''
       passwordForm.confirmPassword = ''
+
+      // 延迟退出登录，让用户看到成功提示
+      setTimeout(() => {
+        authStore.logout()
+        router.push('/login-before')
+      }, 1500)
     } catch (error: any) {
       // 根据错误信息判断是原密码错误还是其他错误
       const errorMsg = error?.response?.data?.message || ''

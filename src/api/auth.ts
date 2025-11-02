@@ -5,6 +5,7 @@ import type {
   VerifyCodeRequest,
   ResetPasswordRequest,
   ChangePasswordRequest,
+  UpdateUsernameRequest,
   RefreshTokenResponse,
   UserInfo,
 } from '@/types'
@@ -25,13 +26,13 @@ export const register = (data: any): Promise<any> => {
 }
 
 // 获取用户信息
-export const getUserInfo = (): Promise<UserInfo> => {
-  return request.get('/auth/user')
+export const getUserInfo = (userId: string): Promise<UserInfo> => {
+  return request.get('/user/info', { params: { userId } })
 }
 
-// 获取验证码
+// 获取验证码（POST 方法，参数在 Query）
 export const getVerifyCode = (data: VerifyCodeRequest): Promise<void> => {
-  return request.get('/user/send-verify-code', { params: data })
+  return request.post('/user/send-verify-code', null, { params: data })
 }
 
 // 重置密码（忘记密码）
@@ -40,11 +41,16 @@ export const resetPassword = (data: ResetPasswordRequest): Promise<void> => {
 }
 
 // 修改用户名
-export const updateUsername = (data: { username: string }): Promise<void> => {
-  return request.put('/auth/username', data)
+export const updateUsername = (data: UpdateUsernameRequest): Promise<void> => {
+  return request.post('/user/change-username', data)
 }
 
 // 修改密码
 export const changePassword = (data: ChangePasswordRequest): Promise<void> => {
   return request.post('/user/change-password', data)
+}
+
+// 用户登出
+export const logout = (refreshToken: string): Promise<void> => {
+  return request.post('/user/logout', null, { params: { refreshToken } })
 }

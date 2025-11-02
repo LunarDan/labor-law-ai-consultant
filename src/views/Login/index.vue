@@ -46,6 +46,10 @@
         </el-form-item>
 
         <el-form-item>
+          <el-checkbox v-model="form.rememberMe">记住我的登录状态</el-checkbox>
+        </el-form-item>
+
+        <el-form-item>
           <el-button type="primary" :loading="loading" style="width: 100%" @click="handleLogin">
             登录/注册
           </el-button>
@@ -93,6 +97,7 @@ const form = reactive<LoginForm>({
   password: '',
   userType: '1',
   clientId: 'web:chrome_1a2b3c4d',
+  rememberMe: false,
 })
 
 // 表单验证规则
@@ -132,11 +137,24 @@ const handleLogin = async () => {
     loading.value = true
     try {
       const res = await login(form)
+
       // 保存双 Token
       authStore.setToken(res.accessToken)
       authStore.setRefreshToken(res.refreshToken)
-      authStore.setUserInfo(res.userInfo)
+
+      // 后端返回的是扁平结构，需要手动组装 userInfo
+      const userInfo = {
+        id: res.id?.toString(),
+        userId: res.userId,
+        username: res.username,
+        phone: form.phone, // 使用表单中的手机号
+        userType: form.userType,
+      }
+      authStore.setUserInfo(userInfo)
       authStore.setUserType(form.userType)
+
+      // 保存记住我状态
+      authStore.setRememberMe(form.rememberMe || false)
 
       ElMessage.success('登录成功')
 

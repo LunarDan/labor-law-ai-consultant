@@ -16,6 +16,7 @@ export interface LoginForm {
   password: string
   userType: UserType
   clientId: string
+  rememberMe?: boolean // 记住我的登录状态
 }
 
 // 忘记密码表单
@@ -52,11 +53,14 @@ export interface ApiResponse<T = any> {
   data: T
 }
 
-// 登录响应（双 Token）
+// 登录响应（双 Token）- 后端返回的是扁平结构
 export interface LoginResponse {
   accessToken: string
   refreshToken: string
-  userInfo: UserInfo
+  userId: string
+  username: string
+  id: number
+  // 注意：后端返回的是扁平结构，不是嵌套的 userInfo 对象
 }
 
 // 刷新 Token 响应

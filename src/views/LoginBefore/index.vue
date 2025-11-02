@@ -53,7 +53,7 @@ import { User, OfficeBuilding } from '@element-plus/icons-vue'
 
 const router = useRouter()
 
-// 使用 markRaw 优化图标性能
+//优化图标性能
 const UserIcon = markRaw(User)
 const OfficeBuildingIcon = markRaw(OfficeBuilding)
 

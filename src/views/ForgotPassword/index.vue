@@ -130,7 +130,7 @@ const rules = reactive<FormRules<ForgotPasswordForm>>({
   phone: [
     { required: true, message: '请输入手机号', trigger: 'blur' },
     {
-      pattern: /^1[3-9]\d{9}$/,
+      pattern: /^1\d{10}$/,
       message: '请输入正确的手机号码',
       trigger: 'blur',
     },
@@ -157,7 +157,7 @@ const getVerificationCode = async () => {
     return
   }
 
-  if (!/^1[3-9]\d{9}$/.test(form.phone)) {
+  if (!/^1\d{10}$/.test(form.phone)) {
     ElMessage.warning('请输入正确的手机号')
     return
   }
@@ -194,8 +194,8 @@ const handleResetPassword = async () => {
   }
 
   // 检查手机号格式
-  if (!/^1[3-9]\d{9}$/.test(form.phone)) {
-    ElMessage.error('修改失败')
+  if (!/^1\d{10}$/.test(form.phone)) {
+    ElMessage.error('手机号格式不正确')
     return
   }
 

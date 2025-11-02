@@ -31,7 +31,11 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   (response: AxiosResponse) => {
     // 返回data字段中的实际数据
-    return response.data.data || response.data
+    // 如果有 response.data.data 字段，返回它；否则返回 response.data
+    if (response.data && typeof response.data === 'object' && 'data' in response.data) {
+      return response.data.data
+    }
+    return response.data
   },
   async (error) => {
     const originalRequest = error.config

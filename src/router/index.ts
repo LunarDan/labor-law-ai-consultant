@@ -50,9 +50,11 @@ router.beforeEach((to, from, next) => {
   // 如果需要认证的页面但未登录，跳转到登录选择页
   if (to.meta.requiresAuth && !authStore.isLoggedIn) {
     next('/login-before')
-  } else {
-    next()
+    return
   }
+
+  // 其他情况正常通过
+  next()
 })
 
 export default router
