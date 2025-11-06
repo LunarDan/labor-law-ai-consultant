@@ -25,7 +25,29 @@ const routes: RouteRecordRaw[] = [
     name: 'Home',
     component: () => import('@/views/Home/index.vue'),
     meta: { requiresAuth: true },
+    redirect: '/home/ai',
+    children: [
+      {
+        path: 'ai',
+        name: 'HomeAI',
+        component: () => import('@/views/Home/modules/AiConsult.vue'),
+        meta: { title: 'AI咨询' },
+      },
+      {
+        path: 'contract',
+        name: 'HomeContract',
+        component: () => import('@/views/Home/modules/ContractReview.vue'),
+        meta: { title: '合同审查' },
+      },
+      {
+        path: 'kb',
+        name: 'HomeKB',
+        component: () => import('@/views/Home/modules/KnowledgeBase.vue'),
+        meta: { title: '知识库' },
+      },
+    ],
   },
+
   {
     path: '/',
     redirect: '/home',
@@ -38,7 +60,7 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
 
   // 如果访问登录选择页或登录页且已登录，直接跳转到主页

@@ -14,11 +14,11 @@ export default defineConfig({
     open: true,
     proxy: {
       '/api': {
-        // 真实后端穿透地址
-        // target: 'http://53c12123.r33.cpolar.top',
+        // 真实后端地址
+        target: 'http://8.134.200.160:611',
 
-        // Mock 地址
-        target: 'http://127.0.0.1:4523/m1/7335686-7065687-default',
+        // Mock 地址（备用）
+        // target: 'http://127.0.0.1:4523/m1/7335686-7065687-default',
 
         changeOrigin: true,
       },
