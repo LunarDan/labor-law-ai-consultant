@@ -46,7 +46,7 @@
         <div class="message-content">
           <div class="message-text loading-text">
             <el-icon class="is-loading">
-              <Loading />
+              <component :is="LoadingIcon" />
             </el-icon>
             <span>正在思考中...</span>
           </div>
@@ -75,14 +75,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, markRaw } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { log } from 'console'
+
+// 使用 markRaw 优化图标
+const LoadingIcon = markRaw(Loading)
 
 interface Message {
   role: 'user' | 'ai'
   content: string
+}
+
+interface ChatHistory {
+  id: string
+  title: string
+  messages: Message[]
+  createdAt: string
+  updatedAt: string
 }
 
 const props = defineProps<{
@@ -104,6 +114,86 @@ const loading = ref<boolean>(false)
 
 // 滚动容器引用
 const scrollbarRef = ref()
+
+// 历史对话相关
+const chatHistory = ref<ChatHistory[]>([])
+const currentChatId = ref<string>('')
+
+// 从 localStorage 加载历史对话
+const loadChatHistory = () => {
+  const stored = localStorage.getItem('chat_history')
+  if (stored) {
+    try {
+      chatHistory.value = JSON.parse(stored)
+    } catch (e) {
+      console.error('Failed to load chat history:', e)
+      chatHistory.value = []
+    }
+  }
+}
+
+// 保存历史对话到 localStorage
+const saveChatHistory = () => {
+  localStorage.setItem('chat_history', JSON.stringify(chatHistory.value))
+  // 通知 Header 组件更新历史列表
+  window.dispatchEvent(new CustomEvent('chat:history-updated'))
+}
+
+// 生成对话标题（取第一个用户问题的前20个字符）
+const generateTitle = (messages: Message[]): string => {
+  const firstUserMsg = messages.find((msg) => msg.role === 'user')
+  if (!firstUserMsg) return '新对话'
+
+  const content = firstUserMsg.content.replace(/<[^>]*>/g, '').trim() // 移除HTML标签
+  if (content.length <= 20) return content
+  return content.substring(0, 20) + '...'
+}
+
+// 保存当前对话
+const saveCurrentChat = () => {
+  if (messages.value.length === 0) return
+
+  const now = new Date().toISOString()
+
+  if (currentChatId.value) {
+    // 更新现有对话
+    const index = chatHistory.value.findIndex((item) => item.id === currentChatId.value)
+    if (index !== -1) {
+      chatHistory.value[index] = {
+        ...chatHistory.value[index],
+        messages: [...messages.value],
+        title: generateTitle(messages.value),
+        updatedAt: now,
+      }
+    }
+  } else {
+    // 创建新对话
+    const newChat: ChatHistory = {
+      id: `chat_${Date.now()}`,
+      title: generateTitle(messages.value),
+      messages: [...messages.value],
+      createdAt: now,
+      updatedAt: now,
+    }
+    chatHistory.value.unshift(newChat)
+    currentChatId.value = newChat.id
+  }
+
+  saveChatHistory()
+}
+
+// 开启新对话
+const startNewChat = () => {
+  // 保存当前对话
+  if (messages.value.length > 0) {
+    saveCurrentChat()
+  }
+
+  // 清空消息
+  messages.value = []
+  currentChatId.value = ''
+  inputText.value = ''
+}
 
 // 是否可以发送（输入框有内容且不在加载中）
 const canSend = computed(() => {
@@ -148,6 +238,9 @@ async function sendMessage() {
   try {
     // TODO: 调用后端AI接口
     await mockAiResponse(userMessage)
+
+    // AI回复完成后，自动保存对话
+    saveCurrentChat()
   } catch (error) {
     console.log(error)
     ElMessage.error('咨询失败，请稍后重试')
@@ -214,12 +307,52 @@ function handleEnter(e: KeyboardEvent) {
 // 滚动到底部
 function scrollToBottom() {
   if (scrollbarRef.value) {
-    const scrollElement = scrollbarRef.value.$refs.wrap$
+    // Element Plus Scrollbar 的内部滚动容器
+    const scrollElement = scrollbarRef.value.wrapRef
     if (scrollElement) {
       scrollElement.scrollTop = scrollElement.scrollHeight
     }
   }
 }
+
+// 处理新对话事件
+const handleNewChatEvent = () => {
+  startNewChat()
+}
+
+// 处理加载历史对话事件
+const handleLoadChatEvent = (event: any) => {
+  const { chatId, messages: historyMessages } = event.detail
+  currentChatId.value = chatId
+  messages.value = [...historyMessages]
+  nextTick(() => {
+    scrollToBottom()
+  })
+}
+
+// 处理删除对话事件
+const handleDeletedChatEvent = (event: any) => {
+  const { chatId } = event.detail
+  if (currentChatId.value === chatId) {
+    messages.value = []
+    currentChatId.value = ''
+  }
+}
+
+// 组件挂载时加载历史记录并监听事件
+onMounted(() => {
+  loadChatHistory()
+  window.addEventListener('chat:new', handleNewChatEvent)
+  window.addEventListener('chat:load', handleLoadChatEvent as EventListener)
+  window.addEventListener('chat:deleted', handleDeletedChatEvent as EventListener)
+})
+
+// 组件卸载时移除事件监听
+onUnmounted(() => {
+  window.removeEventListener('chat:new', handleNewChatEvent)
+  window.removeEventListener('chat:load', handleLoadChatEvent as EventListener)
+  window.removeEventListener('chat:deleted', handleDeletedChatEvent as EventListener)
+})
 </script>
 
 <style scoped lang="scss">

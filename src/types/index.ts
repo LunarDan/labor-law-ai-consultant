@@ -4,6 +4,7 @@ export type UserType = '1' | '2'
 // 用户信息
 export interface UserInfo {
   id?: string
+  userId?: string
   username: string
   phone?: string
   email?: string
