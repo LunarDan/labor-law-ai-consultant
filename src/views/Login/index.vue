@@ -3,18 +3,10 @@
     <el-card class="login-box" shadow="hover">
       <!-- 用户类型选择 -->
       <div class="user-type-tabs">
-        <div
-          class="tab-item"
-          :class="{ active: form.userType === '1' }"
-          @click="form.userType = '1'"
-        >
+        <div class="tab-item" :class="{ active: form.userType === 1 }" @click="form.userType = 1">
           个人用户登录
         </div>
-        <div
-          class="tab-item"
-          :class="{ active: form.userType === '2' }"
-          @click="form.userType = '2'"
-        >
+        <div class="tab-item" :class="{ active: form.userType === 2 }" @click="form.userType = 2">
           企业账号登录
         </div>
       </div>
@@ -95,7 +87,7 @@ const LockIcon = markRaw(Lock)
 const form = reactive<LoginForm>({
   phone: '',
   password: '',
-  userType: '1',
+  userType: 1,
   clientId: 'web:chrome_1a2b3c4d',
   rememberMe: false,
 })
@@ -118,8 +110,8 @@ const rules = reactive<FormRules<LoginForm>>({
 
 // 页面加载时，检查路由参数中是否有用户类型
 onMounted(() => {
-  const typeFromQuery = route.query.type as UserType
-  if (typeFromQuery === '1' || typeFromQuery === '2') {
+  const typeFromQuery = route.query.type as unknown as UserType
+  if (typeFromQuery === 1 || typeFromQuery === 2) {
     form.userType = typeFromQuery
   }
 })

@@ -1,5 +1,5 @@
 // 用户类型 (1代表个人用户, 2代表企业用户)
-export type UserType = '1' | '2'
+export type UserType = 1 | 2
 
 // 用户信息
 export interface UserInfo {
