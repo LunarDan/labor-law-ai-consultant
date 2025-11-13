@@ -30,6 +30,7 @@
             v-model:visible="showHistoryPopover"
             placement="bottom"
             :width="320"
+            trigger="manual"
             popper-class="history-popover"
           >
             <template #reference>
@@ -52,7 +53,7 @@
               <div class="history-dropdown-header">
                 <h4>历史对话</h4>
               </div>
-              <el-scrollbar class="history-dropdown-list" height="300px">
+              <el-scrollbar class="history-dropdown-list" height="680px">
                 <div v-for="(group, date) in groupedHistory" :key="date" class="date-group">
                   <div class="date-label">{{ formatDateLabel(date) }}</div>
                   <div
@@ -64,7 +65,7 @@
                     @mouseenter="hoveredItemId = item.id"
                     @mouseleave="hoveredItemId = ''"
                   >
-                    <div class="history-title">{{ item.title }}</div>
+                    <div class="history-title">{{ item.title || '未命名对话' }}</div>
                     <el-icon
                       v-if="hoveredItemId === item.id"
                       class="delete-icon"
@@ -187,6 +188,8 @@ import { ref, reactive, computed, nextTick, markRaw, onMounted, onUnmounted } fr
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { updateUsername, changePassword, logout as logoutApi } from '@/api/auth'
+import { getChatHistories } from '@/api/chat'
+import type { ConversationMeta } from '@/types'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Edit, Lock, SwitchButton, Delete } from '@element-plus/icons-vue'
 import userAvatarImg from '@/assets/images/user.png'
@@ -207,6 +210,7 @@ interface ChatHistory {
   id: string
   title: string
   messages: Message[]
+  conversationId: string // 后端对话ID
   createdAt: string
   updatedAt: string
 }
@@ -232,10 +236,102 @@ const loadChatHistory = () => {
   const stored = localStorage.getItem('chat_history')
   if (stored) {
     try {
-      chatHistory.value = JSON.parse(stored)
+      const data = JSON.parse(stored)
+      chatHistory.value = data
     } catch (e) {
       console.error('Failed to load chat history:', e)
       chatHistory.value = []
+    }
+  }
+}
+
+// 从API加载历史对话元信息
+const loadChatHistoriesFromApi = async () => {
+  try {
+    if (!authStore.userInfo?.id) {
+      console.warn('用户信息缺失，无法加载历史对话')
+      return
+    }
+
+    // 使用数据库主键ID调用API（不是6位数userId）
+    const userDbId = authStore.userInfo.id
+    if (!userDbId) {
+      console.error('用户数据库ID缺失，无法查询历史对话')
+      return
+    }
+
+    const apiHistories = await getChatHistories(parseInt(userDbId.toString()))
+
+    // 先从localStorage加载现有数据
+    loadChatHistory()
+    const existingData = [...chatHistory.value]
+
+    // 如果API没有返回数据，保持现有数据不变
+    if (!apiHistories || apiHistories.length === 0) {
+      return
+    }
+
+    // 创建conversationId到API数据的映射
+    const apiMap = new Map<string, ConversationMeta>()
+    apiHistories.forEach((item) => {
+      apiMap.set(item.conversationId, item)
+    })
+
+    // 更新现有数据的元信息
+    const updatedHistories: ChatHistory[] = []
+
+    existingData.forEach((localItem) => {
+      const apiItem = apiMap.get(localItem.conversationId)
+
+      if (apiItem) {
+        // API中存在该对话，更新元信息但保留本地消息
+        // 优先使用本地title（因为它是从消息内容生成的，更准确），只有本地没有时才用API的
+        let finalTitle = localItem.title
+        if (!finalTitle || finalTitle === '新对话' || finalTitle === '未命名对话') {
+          // 本地标题无效时，尝试使用API标题
+          finalTitle = apiItem.title || '未命名对话'
+        }
+
+        const mergedItem = {
+          ...localItem,
+          title: finalTitle,
+          createdAt: apiItem.createdAt,
+          updatedAt: apiItem.updatedAt,
+        }
+        updatedHistories.push(mergedItem)
+        // 从映射中移除已处理的项
+        apiMap.delete(localItem.conversationId)
+      } else {
+        // API中不存在，保留本地数据（可能是离线创建的对话）
+        updatedHistories.push(localItem)
+      }
+    })
+
+    // 处理API中有但本地没有的对话（这些需要后续通过getChatHistory加载消息）
+    apiMap.forEach((apiItem) => {
+      const newItem = {
+        id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        title: apiItem.title || '未命名对话',
+        messages: [], // 标记为需要从API加载
+        conversationId: apiItem.conversationId,
+        createdAt: apiItem.createdAt,
+        updatedAt: apiItem.updatedAt,
+      }
+      updatedHistories.push(newItem)
+    })
+
+    // 强制使用新数组触发响应式更新
+    chatHistory.value = [...updatedHistories]
+
+    // 延迟保存，确保UI先更新
+    nextTick(() => {
+      saveChatHistory()
+    })
+  } catch (error) {
+    console.error('从API加载历史对话元信息失败:', error)
+    // API失败时确保不丢失本地数据
+    if (chatHistory.value.length === 0) {
+      loadChatHistory()
     }
   }
 }
@@ -251,10 +347,17 @@ const groupedHistory = computed(() => {
 
   // 按更新时间倒序排序
   const sorted = [...chatHistory.value].sort((a, b) => {
-    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
+    const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
+    return timeB - timeA
   })
 
   sorted.forEach((item) => {
+    // 确保有updatedAt字段
+    if (!item.updatedAt) {
+      return
+    }
+
     const date = item.updatedAt.split('T')[0] // 获取日期部分 YYYY-MM-DD
     if (!groups[date]) {
       groups[date] = []
@@ -278,15 +381,31 @@ const formatDateLabel = (dateStr: string): string => {
 }
 
 // 监听历史对话更新事件
-const handleHistoryUpdate = () => {
+const handleHistoryUpdate = async () => {
+  // 先加载本地数据，确保有内容显示
   loadChatHistory()
+  // 然后尝试从API同步最新数据
+  try {
+    await loadChatHistoriesFromApi()
+  } catch (error) {
+    console.warn('同步API数据失败，使用本地数据:', error)
+  }
 }
 
 // 切换历史对话弹窗
-const toggleHistoryPopover = () => {
+const toggleHistoryPopover = async () => {
   showHistoryPopover.value = !showHistoryPopover.value
   if (showHistoryPopover.value) {
-    loadChatHistory() // 每次打开时刷新列表
+    // loadChatHistoriesFromApi内部会先加载本地数据，然后合并API数据
+    try {
+      await loadChatHistoriesFromApi()
+    } catch (error) {
+      console.warn('从API同步数据失败，使用本地数据:', error)
+      // API失败时，确保加载本地数据
+      if (chatHistory.value.length === 0) {
+        loadChatHistory()
+      }
+    }
   }
 }
 
@@ -528,10 +647,17 @@ const loadHistoryChat = (chatId: string) => {
   if (chat) {
     currentChatId.value = chatId
     showHistoryPopover.value = false
-    // 触发事件，传递对话数据
+
+    // 触发事件，传递对话数据（包括 conversationId）
+    // 如果有conversationId，AiConsult会优先从API加载最新消息
     window.dispatchEvent(
       new CustomEvent('chat:load', {
-        detail: { chatId, messages: chat.messages },
+        detail: {
+          chatId,
+          messages: chat.messages || [],
+          conversationId: chat.conversationId,
+          title: chat.title,
+        },
       }),
     )
   }
@@ -597,7 +723,6 @@ onUnmounted(() => {
   max-width: 1400px;
   margin: 0 auto;
   display: flex;
-  justify-content: space-between;
   align-items: center;
 }
 
@@ -605,6 +730,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  margin-right: auto; // 将右侧内容推到右边
 }
 
 .logo-icon {
@@ -639,6 +765,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 16px;
+  margin-right: -220px; //右移修改
 }
 
 .chat-actions {
@@ -843,7 +970,7 @@ onUnmounted(() => {
 
     .history-dropdown-list {
       // 确保滚动条可见
-      height: 300px;
+      height: 680px;
       overflow: hidden;
 
       // Element Plus scrollbar 样式

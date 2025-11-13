@@ -8,6 +8,7 @@ import type {
   UpdateUsernameRequest,
   RefreshTokenResponse,
   UserInfo,
+  GetUserInfoResponse,
 } from '@/types'
 
 // 登录
@@ -26,8 +27,11 @@ export const register = (data: any): Promise<any> => {
 }
 
 // 获取用户信息
-export const getUserInfo = (userId: string): Promise<UserInfo> => {
-  return request.get('/user/info', { params: { userId } })
+export const getUserInfo = (userId: number | string): Promise<UserInfo> => {
+  // 根据API文档，参数名为userId，类型为integer
+  return request.get<UserInfo>('/user/info', {
+    params: { userId: parseInt(userId.toString()) },
+  })
 }
 
 // 获取验证码（POST 方法，参数在 Query）

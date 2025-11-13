@@ -1,14 +1,23 @@
 // 用户类型 (1代表个人用户, 2代表企业用户)
-export type UserType = 1 | 2
+export type UserType = '1' | '2'
 
 // 用户信息
 export interface UserInfo {
-  id?: string
-  userId?: string
-  username: string
-  phone?: string
-  email?: string
-  userType?: UserType
+  id?: number | string // ID编号 (数据库主键)
+  userId?: string | null // 6位数用户ID
+  username: string // 用户名
+  phone?: string // 手机号
+  email?: string // 邮箱
+  userType?: UserType // 用户类型
+  createdAt?: string // 创建时间
+  updatedAt?: string // 更新时间
+}
+
+// 获取用户信息响应
+export interface GetUserInfoResponse {
+  code: number
+  message: string
+  data: UserInfo
 }
 
 // 登录表单
@@ -68,4 +77,78 @@ export interface LoginResponse {
 export interface RefreshTokenResponse {
   accessToken: string
   refreshToken?: string // 可选：后端可能返回新的 refreshToken
+}
+
+// 修改用户名请求
+export interface UpdateUsernameRequest {
+  userId: string
+  newUsername: string
+}
+
+// AI 聊天请求
+export interface ChatConsultRequest {
+  id: number
+  userType: number
+  conversationId: string
+  message: string
+}
+
+// AI 聊天响应
+export interface ChatConsultResponse {
+  code?: number
+  message?: string
+  data?: string // AI 回复内容（根据API文档）
+  success?: boolean
+  timestamp?: number
+  conversationId?: string // 对话ID
+  [key: string]: any // 其他可能的字段
+}
+
+// 二级标题项
+export interface SecondaryQuestionTitle {
+  title: string // 问题标题
+  primaryTag: string // 一级标签/分类
+}
+
+// 查询二级标题响应
+export interface SecondaryQuestionTitlesResponse {
+  code: number
+  message: string
+  data: SecondaryQuestionTitle[][] // 二维数组
+  success: boolean
+  timestamp: number
+}
+
+// 对话记录消息项
+export interface ChatHistoryMessage {
+  role: string // 角色：user 或 ai
+  content: string // 消息内容
+  timestamp: string // 时间戳
+}
+
+// 查询对话记录响应
+export interface ChatHistoryResponse {
+  code: number
+  message: string
+  data: ChatHistoryMessage[] // 消息列表
+  success: boolean
+  timestamp: number
+}
+
+// 对话元信息
+export interface ConversationMeta {
+  conversationId: string // 对话ID
+  userId: number // 用户ID
+  title: string // 对话标题
+  createdAt: string // 创建时间
+  updatedAt: string // 更新时间
+}
+
+// 查询历史对话元信息响应
+export interface ChatHistoriesResponse {
+  code: number
+  message: string
+  data: ConversationMeta[] // 对话元信息列表
+  success: boolean
+  timestamp: number
 }

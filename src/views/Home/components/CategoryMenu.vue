@@ -13,7 +13,9 @@
             :index="child.id"
             @click="handleSelect(child)"
           >
-            <span class="secondary-title">{{ child.label }}</span>
+            <span class="secondary-title" :title="child.label">
+              {{ truncateText(child.label, 15) }}
+            </span>
           </el-menu-item>
         </el-sub-menu>
       </el-menu>
@@ -50,6 +52,13 @@ const openedMenus = computed(() => props.categories.map((cat) => cat.id))
 // 处理二级标题点击
 function handleSelect(item: QuestionItem) {
   emit('select-question', item.content)
+}
+
+// 文字截断函数：超过指定长度显示省略号
+function truncateText(text: string, maxLength: number): string {
+  if (!text) return ''
+  if (text.length <= maxLength) return text
+  return text.substring(0, maxLength) + '...'
 }
 </script>
 
