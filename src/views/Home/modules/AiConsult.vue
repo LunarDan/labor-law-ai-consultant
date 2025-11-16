@@ -368,8 +368,23 @@ function scrollToBottom() {
 }
 
 // 处理新对话事件
-const handleNewChatEvent = () => {
-  startNewChat()
+const handleNewChatEvent = (event: CustomEvent) => {
+  // 保存当前对话
+  if (messages.value.length > 0) {
+    saveCurrentChat()
+  }
+
+  // 清空消息
+  messages.value = []
+  currentChatId.value = ''
+  inputText.value = ''
+
+  // 如果事件中包含新的conversationId，保留
+  if (event.detail?.conversationId) {
+    currentConversationId.value = event.detail.conversationId
+  } else {
+    currentConversationId.value = ''
+  }
 }
 
 // 从后端API加载历史对话记录
@@ -531,14 +546,14 @@ const handleDeletedChatEvent = (event: any) => {
 // 组件挂载时加载历史记录并监听事件
 onMounted(() => {
   loadChatHistory()
-  window.addEventListener('chat:new', handleNewChatEvent)
+  window.addEventListener('chat:new', handleNewChatEvent as EventListener)
   window.addEventListener('chat:load', handleLoadChatEvent as EventListener)
   window.addEventListener('chat:deleted', handleDeletedChatEvent as EventListener)
 })
 
 // 组件卸载时移除事件监听
 onUnmounted(() => {
-  window.removeEventListener('chat:new', handleNewChatEvent)
+  window.removeEventListener('chat:new', handleNewChatEvent as EventListener)
   window.removeEventListener('chat:load', handleLoadChatEvent as EventListener)
   window.removeEventListener('chat:deleted', handleDeletedChatEvent as EventListener)
 })

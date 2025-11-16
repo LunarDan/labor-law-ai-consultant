@@ -188,7 +188,7 @@ import { ref, reactive, computed, nextTick, markRaw, onMounted, onUnmounted } fr
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { updateUsername, changePassword, logout as logoutApi } from '@/api/auth'
-import { getChatHistories } from '@/api/chat'
+import { getChatHistories, deleteChatHistory, createNewChat } from '@/api/chat'
 import type { ConversationMeta } from '@/types'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Edit, Lock, SwitchButton, Delete } from '@element-plus/icons-vue'
@@ -634,11 +634,30 @@ const handleForgotPassword = () => {
 }
 
 // 开启新对话
-const handleNewChat = () => {
-  currentChatId.value = ''
-  showHistoryPopover.value = false // 关闭历史对话弹窗
-  // 触发事件，让AiConsult组件知道
-  window.dispatchEvent(new CustomEvent('chat:new'))
+const handleNewChat = async () => {
+  try {
+    // 获取当前对话ID（如果有的话）
+    const currentConversationId = chatHistory.value.find(
+      (item) => item.id === currentChatId.value,
+    )?.conversationId
+
+    // 调用后端API创建新对话，title设置为"新对话"
+    const newConversationId = await createNewChat('新对话', currentConversationId)
+
+    // 清空当前对话ID
+    currentChatId.value = ''
+    showHistoryPopover.value = false // 关闭历史对话弹窗
+
+    // 触发事件，让AiConsult组件知道，并传递新的conversationId
+    window.dispatchEvent(
+      new CustomEvent('chat:new', {
+        detail: { conversationId: newConversationId },
+      }),
+    )
+  } catch (error) {
+    console.error('创建新对话失败:', error)
+    ElMessage.error('创建新对话失败，请稍后重试')
+  }
 }
 
 // 加载历史对话
@@ -683,9 +702,19 @@ const confirmDeleteChat = (chatId: string) => {
 }
 
 // 删除对话
-const deleteChat = (chatId: string) => {
+const deleteChat = async (chatId: string) => {
   const index = chatHistory.value.findIndex((item) => item.id === chatId)
-  if (index !== -1) {
+  if (index === -1) return
+
+  const chat = chatHistory.value[index]
+
+  try {
+    // 如果有conversationId，调用后端API删除
+    if (chat.conversationId) {
+      await deleteChatHistory(chat.conversationId)
+    }
+
+    // 删除本地数据
     chatHistory.value.splice(index, 1)
     saveChatHistory()
 
@@ -696,6 +725,9 @@ const deleteChat = (chatId: string) => {
     }
 
     ElMessage.success('删除成功')
+  } catch (error) {
+    console.error('删除对话失败:', error)
+    ElMessage.error('删除失败，请稍后重试')
   }
 }
 

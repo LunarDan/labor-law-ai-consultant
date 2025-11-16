@@ -95,3 +95,37 @@ export const getChatHistories = async (userId: number): Promise<ConversationMeta
   // response 本身就是对话元信息数组
   return response || []
 }
+
+/**
+ * 删除对话历史记录
+ * @param conversationId 对话ID
+ * @returns Promise<void>
+ */
+export const deleteChatHistory = async (conversationId: string): Promise<void> => {
+  // axios拦截器已经处理了响应
+  await request.delete(`/chat/history`, {
+    params: { conversationId },
+  })
+}
+
+/**
+ * 创建新对话
+ * @param title 对话标题
+ * @param currentConversationId 当前对话ID（可选）
+ * @returns 新的对话ID
+ */
+export const createNewChat = async (
+  title: string,
+  currentConversationId?: string,
+): Promise<string> => {
+  // axios拦截器已经处理了响应，返回的就是 response.data.data
+  const response = await request.post<string>(`/chat/new`, null, {
+    params: {
+      title,
+      ...(currentConversationId && { currentConversationId }),
+    },
+  })
+
+  // response 本身就是新的 conversationId
+  return response || ''
+}
