@@ -273,9 +273,21 @@ const loadChatHistoriesFromApi = async () => {
       return
     }
 
+    // 过滤掉空对话和无效对话
+    const validApiHistories = apiHistories.filter((item) => {
+      // 过滤条件：
+      // 1. 必须有conversationId
+      // 2. 标题不能是"新对话"或"未命名对话"（这些通常是空对话）
+      // 3. 标题不能为空
+      const title = item.title || ''
+      return (
+        item.conversationId && title.trim() !== '' && title !== '新对话' && title !== '未命名对话'
+      )
+    })
+
     // 创建conversationId到API数据的映射
     const apiMap = new Map<string, ConversationMeta>()
-    apiHistories.forEach((item) => {
+    validApiHistories.forEach((item) => {
       apiMap.set(item.conversationId, item)
     })
 

@@ -32,6 +32,38 @@
         <div class="message-content">
           <!-- eslint-disable-next-line vue/no-v-html -->
           <div class="message-text" v-html="msg.content"></div>
+
+          <!-- 可能的后续问题 -->
+          <div
+            v-if="msg.followUpQuestions && msg.followUpQuestions.length > 0"
+            class="follow-up-questions"
+          >
+            <div
+              v-for="(question, qIndex) in msg.followUpQuestions"
+              :key="qIndex"
+              class="follow-up-question-item"
+            >
+              <span class="question-text">{{ question }}</span>
+              <div class="question-actions">
+                <el-button
+                  size="small"
+                  type="success"
+                  plain
+                  @click="handleFollowUpAnswer(question, true, index)"
+                >
+                  是
+                </el-button>
+                <el-button
+                  size="small"
+                  type="info"
+                  plain
+                  @click="handleFollowUpAnswer(question, false, index)"
+                >
+                  否
+                </el-button>
+              </div>
+            </div>
+          </div>
         </div>
         <div v-if="msg.role === 'user'" class="avatar user-avatar">
           <img src="@/assets/images/user.png" alt="用户" />
@@ -91,6 +123,8 @@ const authStore = useAuthStore()
 interface Message {
   role: 'user' | 'ai'
   content: string
+  followUpQuestions?: string[] // 可能的后续问题
+  originalQuestion?: string // 保存用户原始问题，用于后续问题的上下文
 }
 
 interface ChatHistory {
@@ -147,13 +181,15 @@ const saveChatHistory = () => {
   window.dispatchEvent(new CustomEvent('chat:history-updated'))
 }
 
-// 格式化AI回复内容，使其更有条理
-const formatAiReply = (content: string): string => {
-  if (!content) return content
+// 格式化AI回复内容，使其更有条理，并提取后续问题
+const formatAiReply = (
+  content: string,
+): { formattedContent: string; followUpQuestions: string[] } => {
+  if (!content) return { formattedContent: content, followUpQuestions: [] }
 
   // 如果已经包含格式化标记，直接返回（避免重复格式化）
   if (content.includes('class="ai-section-title"') || content.includes('class="ai-list-item"')) {
-    return content
+    return { formattedContent: content, followUpQuestions: [] }
   }
 
   // 按行处理内容
@@ -162,8 +198,38 @@ const formatAiReply = (content: string): string => {
     .map((line) => line.trim())
     .filter((line) => line)
   const result: string[] = []
+  const followUpQuestions: string[] = []
+  let inFollowUpSection = false
 
   for (const line of lines) {
+    // 检测是否进入"可能的后续问题"部分
+    if (
+      line.includes('【可能的后续问题】') ||
+      line.includes('【后续问题】') ||
+      line.includes('可能的后续问题：') ||
+      line.includes('后续问题：')
+    ) {
+      inFollowUpSection = true
+      // 添加标题但不显示后续问题内容（改为交互式显示）
+      result.push(line.replace(/【([^】]+)】/g, '<div class="ai-section-title">【$1】</div>'))
+      continue
+    }
+
+    // 如果在后续问题部分，提取问题
+    if (inFollowUpSection) {
+      // 匹配编号格式的问题
+      const questionMatch = line.match(/^(\d+[\.:、])\s*(.+)$/)
+      if (questionMatch) {
+        followUpQuestions.push(questionMatch[2])
+        continue
+      }
+      // 匹配纯问题（没有编号）
+      if (line.endsWith('？') || line.endsWith('?')) {
+        followUpQuestions.push(line)
+        continue
+      }
+    }
+
     // 1. 处理【标题】格式
     if (line.includes('【') && line.includes('】')) {
       result.push(line.replace(/【([^】]+)】/g, '<div class="ai-section-title">【$1】</div>'))
@@ -183,16 +249,18 @@ const formatAiReply = (content: string): string => {
     result.push(`<p class="ai-paragraph">${line}</p>`)
   }
 
-  return result.join('')
+  return { formattedContent: result.join(''), followUpQuestions }
 }
 
 // 格式化消息数组中的AI回复
 const formatMessages = (messages: Message[]): Message[] => {
   return messages.map((msg) => {
     if (msg.role === 'ai') {
+      const { formattedContent, followUpQuestions } = formatAiReply(msg.content)
       return {
         ...msg,
-        content: formatAiReply(msg.content),
+        content: formattedContent,
+        followUpQuestions,
       }
     }
     return msg
@@ -324,22 +392,34 @@ async function callAiConsult(question: string): Promise<void> {
     throw new Error('User info missing')
   }
 
-  // 如果是第一个问题（messages.length === 1，即只有用户刚发送的消息），调用带标题的新建对话接口
+  // 如果是第一个问题（messages.length === 1，即只有用户刚发送的消息）
   // 注意：此时消息已经被添加到messages数组中了，所以length为1而不是0
-  if (messages.value.length === 1 && currentConversationId.value) {
+  if (messages.value.length === 1) {
     try {
-      // 保存初始ID
-      const initialConversationId = currentConversationId.value
-
-      // 调用创建对话接口，传入用户的第一个问题作为标题
-      const newConversationId = await createNewChatWithTitle(question, initialConversationId)
-
-      if (newConversationId) {
-        currentConversationId.value = newConversationId
+      // 如果已有conversationId（如从历史记录加载），使用它更新标题
+      if (currentConversationId.value) {
+        const newConversationId = await createNewChatWithTitle(
+          question,
+          currentConversationId.value,
+        )
+        if (newConversationId) {
+          currentConversationId.value = newConversationId
+        }
+      } else {
+        // 没有conversationId，先创建一个空对话
+        const initialConversationId = await createNewChat()
+        if (initialConversationId) {
+          // 然后用第一个问题作为标题更新对话
+          const newConversationId = await createNewChatWithTitle(question, initialConversationId)
+          currentConversationId.value = newConversationId || initialConversationId
+        }
       }
     } catch (error) {
       console.error('创建对话失败:', error)
-      // 失败时继续使用初始ID
+      // 失败时使用临时ID
+      if (!currentConversationId.value) {
+        currentConversationId.value = generateConversationId()
+      }
     }
   }
 
@@ -384,9 +464,12 @@ async function callAiConsult(question: string): Promise<void> {
     }
 
     // 格式化并添加AI回复到消息列表
+    const { formattedContent, followUpQuestions } = formatAiReply(aiReply)
     messages.value.push({
       role: 'ai',
-      content: formatAiReply(aiReply),
+      content: formattedContent,
+      followUpQuestions,
+      originalQuestion: question, // 保存用户原始问题
     })
   } catch (error: any) {
     console.error('AI咨询接口调用失败:', error)
@@ -429,6 +512,46 @@ function handleEnter(e: KeyboardEvent) {
   }
 }
 
+// 处理后续问题的回答（是/否）
+function handleFollowUpAnswer(question: string, answer: boolean, messageIndex: number) {
+  const message = messages.value[messageIndex]
+  if (!message || message.role !== 'ai') return
+
+  // 获取原始问题
+  const originalQuestion = message.originalQuestion || ''
+
+  // 根据用户选择处理问题
+  let formattedAnswer = ''
+
+  if (answer) {
+    // 选择"是" - 直接显示原问题
+    formattedAnswer = question
+  } else {
+    // 选择"否" - 显示原问题 + "的否定"
+    formattedAnswer = question + '的否定'
+  }
+
+  // 构造完整的补充说明，结合原问题和用户选择
+  let fullMessage = ''
+  if (originalQuestion) {
+    fullMessage = `关于"${originalQuestion}"这个问题，补充说明：${formattedAnswer}。请基于以上信息重新分析。`
+  } else {
+    fullMessage = `补充说明：${formattedAnswer}。请基于以上信息重新分析。`
+  }
+
+  // 将构造的内容填入输入框
+  inputText.value = fullMessage
+
+  // 自动滚动到输入框
+  nextTick(() => {
+    const inputElement = document.querySelector('.input-area textarea')
+    if (inputElement) {
+      inputElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      ;(inputElement as HTMLTextAreaElement).focus()
+    }
+  })
+}
+
 // 滚动到底部
 function scrollToBottom() {
   if (scrollbarRef.value) {
@@ -440,24 +563,10 @@ function scrollToBottom() {
   }
 }
 
-// 初始化对话 - 页面加载时自动创建新对话
+// 初始化对话 - 不再在页面加载时创建对话，改为在发送第一条消息时创建
 const initializeConversation = async () => {
-  // 如果已经有conversationId，不重复创建
-  if (currentConversationId.value) {
-    return
-  }
-
-  try {
-    // 调用后端API创建新对话，不需要传参数
-    const newConversationId = await createNewChat()
-
-    if (newConversationId) {
-      currentConversationId.value = newConversationId
-    }
-  } catch (error) {
-    console.error('初始化对话失败:', error)
-    // 失败不影响使用，用户发送第一条消息时会使用临时ID
-  }
+  // 清空conversationId，等待用户发送第一条消息时再创建
+  currentConversationId.value = ''
 }
 
 // 处理新对话事件
@@ -469,31 +578,17 @@ const handleNewChatEvent = async (event: Event) => {
       saveCurrentChat()
     }
 
-    // 清空消息
+    // 清空消息和对话ID
     messages.value = []
     currentChatId.value = ''
     inputText.value = ''
 
-    // 调用后端API创建初始对话（获取初始ID）
-    if (customEvent.detail?.conversationId) {
-      // 如果事件中已经包含新的conversationId，直接使用
-      currentConversationId.value = customEvent.detail.conversationId
-    } else {
-      // 调用初始化接口获取初始ID
-      const initialConversationId = await createNewChat()
-
-      if (initialConversationId) {
-        currentConversationId.value = initialConversationId
-      } else {
-        // API失败，清空conversationId
-        currentConversationId.value = ''
-      }
-    }
+    // 清空conversationId，等待用户发送第一条消息时再创建对话
+    // 如果事件中已经包含conversationId（如从历史记录加载），则使用它
+    currentConversationId.value = customEvent.detail?.conversationId || ''
   } catch (error) {
     console.error('创建新对话失败:', error)
-    // 失败时也清空conversationId，让下次发送消息时重新生成
     currentConversationId.value = ''
-    ElMessage.warning('创建新对话失败，但不影响继续使用')
   }
 }
 
@@ -544,21 +639,32 @@ const loadHistoryFromApi = async (conversationId: string): Promise<Message[]> =>
           // 尝试多种模式提取用户输入
           let extractedText = ''
 
-          // 模式1: text = "内容"
-          let textMatch = content.match(/text = "([^"]+)"/)
-          if (textMatch) {
-            extractedText = textMatch[1]
-          } else {
-            // 模式2: TextContent { text = "内容" }
-            textMatch = content.match(/TextContent.*?text = "([^"]+)"/)
-            if (textMatch) {
-              extractedText = textMatch[1]
+          // 模式1: text = "内容" - 贪婪匹配，找到最后一个结束引号之前的内容
+          const textStartMatch = content.match(/text\s*=\s*"/)
+          if (textStartMatch && textStartMatch.index !== undefined) {
+            const startPos = textStartMatch.index + textStartMatch[0].length
+            const remainingContent = content.substring(startPos)
+
+            // 从后往前找最后一个引号（排除后面可能的 } 等字符）
+            // 优先匹配：text = "内容" } 这种格式
+            const endMatch = remainingContent.match(/^(.+?)"\s*\}/)
+            if (endMatch) {
+              extractedText = endMatch[1]
             } else {
-              // 如果都无法提取，尝试找到中文内容
-              const chineseMatch = content.match(/[\u4e00-\u9fa5].*[\u4e00-\u9fa5？。！]/)
-              if (chineseMatch) {
-                extractedText = chineseMatch[0]
+              // 如果没有 }，尝试找到最后一个引号
+              const lastQuoteIndex = remainingContent.lastIndexOf('"')
+              if (lastQuoteIndex !== -1) {
+                extractedText = remainingContent.substring(0, lastQuoteIndex)
               }
+            }
+          }
+
+          // 如果模式1失败，尝试其他模式
+          if (!extractedText) {
+            // 模式2: 尝试找到中文内容
+            const chineseMatch = content.match(/[\u4e00-\u9fa5].*[\u4e00-\u9fa5？。！]/)
+            if (chineseMatch) {
+              extractedText = chineseMatch[0]
             }
           }
 
@@ -568,11 +674,19 @@ const loadHistoryFromApi = async (conversationId: string): Promise<Message[]> =>
         }
 
         // 对AI消息进行格式化处理
-        const formattedContent = role === 'ai' ? formatAiReply(content) : content
+        let finalContent = content
+        let followUpQuestions: string[] = []
+
+        if (role === 'ai') {
+          const formatted = formatAiReply(content)
+          finalContent = formatted.formattedContent
+          followUpQuestions = formatted.followUpQuestions
+        }
 
         return {
           role: role as 'user' | 'ai',
-          content: formattedContent,
+          content: finalContent,
+          followUpQuestions: role === 'ai' ? followUpQuestions : undefined,
         }
       })
 
@@ -851,6 +965,54 @@ onUnmounted(() => {
         :deep(strong) {
           font-weight: 600;
           color: #409eff;
+        }
+      }
+
+      // 后续问题交互区域
+      .follow-up-questions {
+        margin-top: 16px;
+        padding-top: 12px;
+        border-top: 1px dashed #e4e7ed;
+
+        .follow-up-question-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 12px;
+          margin-bottom: 10px;
+          background: #f9fafb;
+          border-radius: 6px;
+          border: 1px solid #e4e7ed;
+          transition: all 0.3s;
+
+          &:hover {
+            background: #f0f2f5;
+            border-color: #409eff;
+          }
+
+          &:last-child {
+            margin-bottom: 0;
+          }
+
+          .question-text {
+            flex: 1;
+            font-size: 14px;
+            color: #303133;
+            line-height: 1.6;
+            margin-right: 12px;
+          }
+
+          .question-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+
+            :deep(.el-button) {
+              min-width: 50px;
+              padding: 5px 12px;
+              font-size: 13px;
+            }
+          }
         }
       }
     }
