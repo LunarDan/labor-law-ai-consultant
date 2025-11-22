@@ -79,7 +79,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted, markRaw } from 
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
-import { chatConsult, getChatHistory } from '@/api/chat'
+import { chatConsult, getChatHistory, createNewChat, createNewChatWithTitle } from '@/api/chat'
 import type { ChatConsultRequest, ChatHistoryMessage } from '@/types'
 
 // 使用 markRaw 优化图标
@@ -147,6 +147,58 @@ const saveChatHistory = () => {
   window.dispatchEvent(new CustomEvent('chat:history-updated'))
 }
 
+// 格式化AI回复内容，使其更有条理
+const formatAiReply = (content: string): string => {
+  if (!content) return content
+
+  // 如果已经包含格式化标记，直接返回（避免重复格式化）
+  if (content.includes('class="ai-section-title"') || content.includes('class="ai-list-item"')) {
+    return content
+  }
+
+  // 按行处理内容
+  const lines = content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line)
+  const result: string[] = []
+
+  for (const line of lines) {
+    // 1. 处理【标题】格式
+    if (line.includes('【') && line.includes('】')) {
+      result.push(line.replace(/【([^】]+)】/g, '<div class="ai-section-title">【$1】</div>'))
+      continue
+    }
+
+    // 2. 处理编号列表（1. 2. 3. 等）
+    const listMatch = line.match(/^(\d+[\.:、])\s*(.+)$/)
+    if (listMatch) {
+      result.push(
+        `<div class="ai-list-item"><span class="ai-list-number">${listMatch[1]}</span><span class="ai-list-content">${listMatch[2]}</span></div>`,
+      )
+      continue
+    }
+
+    // 3. 普通段落
+    result.push(`<p class="ai-paragraph">${line}</p>`)
+  }
+
+  return result.join('')
+}
+
+// 格式化消息数组中的AI回复
+const formatMessages = (messages: Message[]): Message[] => {
+  return messages.map((msg) => {
+    if (msg.role === 'ai') {
+      return {
+        ...msg,
+        content: formatAiReply(msg.content),
+      }
+    }
+    return msg
+  })
+}
+
 // 生成对话标题（取第一个用户问题的前20个字符）
 const generateTitle = (messages: Message[]): string => {
   const firstUserMsg = messages.find((msg) => msg.role === 'user')
@@ -197,20 +249,6 @@ const saveCurrentChat = () => {
   saveChatHistory()
 }
 
-// 开启新对话
-const startNewChat = () => {
-  // 保存当前对话
-  if (messages.value.length > 0) {
-    saveCurrentChat()
-  }
-
-  // 清空消息
-  messages.value = []
-  currentChatId.value = ''
-  currentConversationId.value = ''
-  inputText.value = ''
-}
-
 // 是否可以发送（输入框有内容且不在加载中）
 const canSend = computed(() => {
   return inputText.value.trim().length > 0 && !loading.value
@@ -219,9 +257,18 @@ const canSend = computed(() => {
 // 监听选中的常见问题，自动填充到输入框
 watch(
   () => props.selectedQuestion,
-  (newVal) => {
+  async (newVal) => {
     if (newVal) {
       inputText.value = newVal
+
+      // 检查是否是从知识库跳转过来（通过 localStorage 标记）
+      const autoSend = localStorage.getItem('aiConsultAutoSend')
+      if (autoSend === 'true') {
+        // 从知识库跳转过来时，自动发送问题
+        localStorage.removeItem('aiConsultAutoSend') // 清除标记
+        await nextTick()
+        await sendMessage()
+      }
     }
   },
 )
@@ -232,6 +279,9 @@ async function sendMessage() {
 
   const userMessage = inputText.value.trim()
   if (!userMessage) return
+
+  // 保存最后的咨询问题到 localStorage，供知识库使用
+  localStorage.setItem('lastConsultQuestion', userMessage)
 
   // 添加用户消息
   messages.value.push({
@@ -274,14 +324,37 @@ async function callAiConsult(question: string): Promise<void> {
     throw new Error('User info missing')
   }
 
-  // 如果是新对话，生成新的 conversationId
+  // 如果是第一个问题（messages.length === 1，即只有用户刚发送的消息），调用带标题的新建对话接口
+  // 注意：此时消息已经被添加到messages数组中了，所以length为1而不是0
+  if (messages.value.length === 1 && currentConversationId.value) {
+    try {
+      // 保存初始ID
+      const initialConversationId = currentConversationId.value
+
+      // 调用创建对话接口，传入用户的第一个问题作为标题
+      const newConversationId = await createNewChatWithTitle(question, initialConversationId)
+
+      if (newConversationId) {
+        currentConversationId.value = newConversationId
+      }
+    } catch (error) {
+      console.error('创建对话失败:', error)
+      // 失败时继续使用初始ID
+    }
+  }
+
+  // 如果还是没有conversationId，生成临时ID
   if (!currentConversationId.value) {
+    console.warn('⚠️ 没有conversationId，使用临时ID')
     currentConversationId.value = generateConversationId()
   }
 
   // 构建请求参数
   const requestData: ChatConsultRequest = {
-    id: parseInt(authStore.userInfo.id),
+    id:
+      typeof authStore.userInfo.id === 'string'
+        ? parseInt(authStore.userInfo.id)
+        : authStore.userInfo.id,
     userType: authStore.userType === '1' ? 1 : 2,
     conversationId: currentConversationId.value,
     message: question,
@@ -310,10 +383,10 @@ async function callAiConsult(question: string): Promise<void> {
       throw new Error('No reply in response')
     }
 
-    // 将AI回复添加到消息列表
+    // 格式化并添加AI回复到消息列表
     messages.value.push({
       role: 'ai',
-      content: aiReply,
+      content: formatAiReply(aiReply),
     })
   } catch (error: any) {
     console.error('AI咨询接口调用失败:', error)
@@ -367,23 +440,60 @@ function scrollToBottom() {
   }
 }
 
-// 处理新对话事件
-const handleNewChatEvent = (event: CustomEvent) => {
-  // 保存当前对话
-  if (messages.value.length > 0) {
-    saveCurrentChat()
+// 初始化对话 - 页面加载时自动创建新对话
+const initializeConversation = async () => {
+  // 如果已经有conversationId，不重复创建
+  if (currentConversationId.value) {
+    return
   }
 
-  // 清空消息
-  messages.value = []
-  currentChatId.value = ''
-  inputText.value = ''
+  try {
+    // 调用后端API创建新对话，不需要传参数
+    const newConversationId = await createNewChat()
 
-  // 如果事件中包含新的conversationId，保留
-  if (event.detail?.conversationId) {
-    currentConversationId.value = event.detail.conversationId
-  } else {
+    if (newConversationId) {
+      currentConversationId.value = newConversationId
+    }
+  } catch (error) {
+    console.error('初始化对话失败:', error)
+    // 失败不影响使用，用户发送第一条消息时会使用临时ID
+  }
+}
+
+// 处理新对话事件
+const handleNewChatEvent = async (event: Event) => {
+  const customEvent = event as CustomEvent
+  try {
+    // 保存当前对话
+    if (messages.value.length > 0) {
+      saveCurrentChat()
+    }
+
+    // 清空消息
+    messages.value = []
+    currentChatId.value = ''
+    inputText.value = ''
+
+    // 调用后端API创建初始对话（获取初始ID）
+    if (customEvent.detail?.conversationId) {
+      // 如果事件中已经包含新的conversationId，直接使用
+      currentConversationId.value = customEvent.detail.conversationId
+    } else {
+      // 调用初始化接口获取初始ID
+      const initialConversationId = await createNewChat()
+
+      if (initialConversationId) {
+        currentConversationId.value = initialConversationId
+      } else {
+        // API失败，清空conversationId
+        currentConversationId.value = ''
+      }
+    }
+  } catch (error) {
+    console.error('创建新对话失败:', error)
+    // 失败时也清空conversationId，让下次发送消息时重新生成
     currentConversationId.value = ''
+    ElMessage.warning('创建新对话失败，但不影响继续使用')
   }
 }
 
@@ -457,9 +567,12 @@ const loadHistoryFromApi = async (conversationId: string): Promise<Message[]> =>
           }
         }
 
+        // 对AI消息进行格式化处理
+        const formattedContent = role === 'ai' ? formatAiReply(content) : content
+
         return {
           role: role as 'user' | 'ai',
-          content: content,
+          content: formattedContent,
         }
       })
 
@@ -468,13 +581,22 @@ const loadHistoryFromApi = async (conversationId: string): Promise<Message[]> =>
     let consecutiveLegalAnalysis: any[] = []
 
     convertedMessages.forEach((msg, index) => {
-      // 如果是以【法律分析】开头的AI消息，收集起来
-      if (msg.role === 'ai' && msg.content.startsWith('【法律分析】')) {
+      // 如果是以【法律分析】开头的AI消息，收集起来（需要检查原始内容或格式化后的内容）
+      const isLegalAnalysis =
+        msg.role === 'ai' &&
+        (msg.content.includes('【法律分析】') || msg.content.includes('法律分析'))
+
+      if (isLegalAnalysis) {
         consecutiveLegalAnalysis.push(msg)
 
         // 检查下一条消息是否还是法律分析
         const nextMsg = convertedMessages[index + 1]
-        if (!nextMsg || nextMsg.role !== 'ai' || !nextMsg.content.startsWith('【法律分析】')) {
+        const nextIsLegalAnalysis =
+          nextMsg &&
+          nextMsg.role === 'ai' &&
+          (nextMsg.content.includes('【法律分析】') || nextMsg.content.includes('法律分析'))
+
+        if (!nextIsLegalAnalysis) {
           // 下一条不是法律分析了，保留最后一条（最完整的）
           if (consecutiveLegalAnalysis.length > 0) {
             deduplicatedMessages.push(consecutiveLegalAnalysis[consecutiveLegalAnalysis.length - 1])
@@ -506,17 +628,17 @@ const handleLoadChatEvent = async (event: any) => {
       const apiMessages = await loadHistoryFromApi(conversationId)
 
       if (apiMessages && apiMessages.length > 0) {
-        messages.value = apiMessages
+        messages.value = apiMessages // API数据已经在loadHistoryFromApi中格式化过了
         currentConversationId.value = conversationId
       } else {
-        // API返回空消息，使用本地数据
-        messages.value = [...(historyMessages || [])]
+        // API返回空消息，使用本地数据（需要格式化）
+        messages.value = formatMessages([...(historyMessages || [])])
         currentConversationId.value = conversationId
       }
     } catch (error) {
-      // API加载失败，使用localStorage的数据
+      // API加载失败，使用localStorage的数据（需要格式化）
       console.error('API加载失败，使用本地缓存数据:', error)
-      messages.value = [...(historyMessages || [])]
+      messages.value = formatMessages([...(historyMessages || [])])
       if (conversationId) {
         currentConversationId.value = conversationId
       }
@@ -524,8 +646,8 @@ const handleLoadChatEvent = async (event: any) => {
       loading.value = false
     }
   } else {
-    // 没有conversationId，直接使用localStorage的数据
-    messages.value = [...(historyMessages || [])]
+    // 没有conversationId，直接使用localStorage的数据（需要格式化）
+    messages.value = formatMessages([...(historyMessages || [])])
   }
 
   nextTick(() => {
@@ -545,6 +667,9 @@ const handleDeletedChatEvent = (event: any) => {
 
 // 组件挂载时加载历史记录并监听事件
 onMounted(() => {
+  // 初始化conversationId - 页面加载时立即调用创建对话接口
+  initializeConversation()
+
   loadChatHistory()
   window.addEventListener('chat:new', handleNewChatEvent as EventListener)
   window.addEventListener('chat:load', handleLoadChatEvent as EventListener)
@@ -584,6 +709,10 @@ onUnmounted(() => {
 
       .avatar {
         margin-right: 12px;
+      }
+
+      .message-content {
+        max-width: 80%;
       }
     }
 
@@ -657,21 +786,68 @@ onUnmounted(() => {
           color: #909399;
         }
 
+        // 段落样式
         :deep(p) {
           margin: 8px 0;
           line-height: 1.8;
         }
 
+        // AI格式化段落
+        :deep(.ai-paragraph) {
+          margin: 10px 0;
+          line-height: 1.9;
+          text-indent: 0;
+        }
+
+        // AI章节标题样式（【法律分析】、【实务建议】等）
+        :deep(.ai-section-title) {
+          font-size: 15px;
+          font-weight: 600;
+          color: #409eff;
+          margin: 20px 0 12px 0;
+          padding: 8px 12px;
+          background: linear-gradient(90deg, #e6f2ff 0%, transparent 100%);
+          border-left: 4px solid #409eff;
+          border-radius: 2px;
+
+          &:first-child {
+            margin-top: 0;
+          }
+        }
+
+        // AI编号列表项
+        :deep(.ai-list-item) {
+          display: flex;
+          margin: 10px 0;
+          padding-left: 8px;
+          line-height: 1.8;
+
+          .ai-list-number {
+            flex-shrink: 0;
+            font-weight: 600;
+            color: #606266;
+            margin-right: 8px;
+            min-width: 24px;
+          }
+
+          .ai-list-content {
+            flex: 1;
+            color: #303133;
+          }
+        }
+
+        // 列表样式
         :deep(ul) {
-          margin: 8px 0;
+          margin: 12px 0;
           padding-left: 20px;
 
           li {
-            margin: 4px 0;
+            margin: 6px 0;
             line-height: 1.8;
           }
         }
 
+        // 强调文本
         :deep(strong) {
           font-weight: 600;
           color: #409eff;

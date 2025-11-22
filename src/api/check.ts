@@ -357,3 +357,25 @@ export const parseFileContent = async (file: File): Promise<FileParseResult> => 
   // response 本身就是解析结果数据
   return response
 }
+
+/**
+ * 文件下载请求参数
+ */
+export interface FileDownloadRequest {
+  isChange: boolean // 是否变更
+  conversationId: string // 会话ID
+  contentType: string // 文件类型（pdf、word、docx等）
+  content: string // 文件内容
+}
+
+/**
+ * 下载文件
+ * @param data 下载请求参数
+ * @returns 文件Blob
+ */
+export const downloadFile = async (data: FileDownloadRequest): Promise<Blob> => {
+  const response = await request.post('/file/download', data, {
+    responseType: 'blob', // 重要：指定响应类型为blob
+  })
+  return response as Blob
+}

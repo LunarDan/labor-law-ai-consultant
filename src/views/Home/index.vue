@@ -31,10 +31,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { ElMessage } from 'element-plus'
+// @ts-ignore: Vue SFC with script setup should auto-export
 import CategoryMenu from './components/CategoryMenu.vue'
 import { getSecondaryQuestionTitles } from '@/api/chat'
 import type { SecondaryQuestionTitle } from '@/types'
@@ -336,19 +336,37 @@ const loadCategories = async () => {
     loading.value = true
     const userType = authStore.userType === '2' ? 2 : 1
     const data = await getSecondaryQuestionTitles(userType)
-    apiCategories.value = transformApiData(data)
+
+    if (data && data.length > 0) {
+      apiCategories.value = transformApiData(data)
+      console.log('✅ 成功加载API分类数据，分类数量:', apiCategories.value.length)
+    } else {
+      console.log('⚠️ API返回空数据，使用本地默认数据')
+    }
   } catch (error) {
-    console.error('加载分类数据失败:', error)
-    // 失败时使用硬编码数据作为降级方案
-    ElMessage.warning('加载问题分类失败，使用默认数据')
+    console.error('❌ 加载分类数据失败:', error)
+    // 失败时静默降级，使用硬编码数据
   } finally {
     loading.value = false
+  }
+}
+
+// 处理从知识库跳转到AI咨询的事件
+const handleSwitchToAIConsult = (event: CustomEvent) => {
+  const { question } = event.detail
+  if (question) {
+    // 切换到AI咨询Tab
+    router.push('/home/ai')
+    // 设置选中的问题
+    selectedQuestion.value = question
   }
 }
 
 // 组件挂载时加载数据
 onMounted(() => {
   loadCategories()
+  // 监听从知识库切换到AI咨询的事件
+  window.addEventListener('switchToAIConsult', handleSwitchToAIConsult as EventListener)
 })
 
 // 当前选中的问题内容
@@ -380,6 +398,11 @@ function onSelectQuestion(content: string) {
 function clearSelectedQuestion() {
   selectedQuestion.value = ''
 }
+
+// 组件卸载时移除事件监听
+onUnmounted(() => {
+  window.removeEventListener('switchToAIConsult', handleSwitchToAIConsult as EventListener)
+})
 </script>
 
 <style scoped lang="scss">

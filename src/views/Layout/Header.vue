@@ -65,7 +65,9 @@
                     @mouseenter="hoveredItemId = item.id"
                     @mouseleave="hoveredItemId = ''"
                   >
-                    <div class="history-title">{{ item.title || '未命名对话' }}</div>
+                    <div class="history-title">
+                      {{ item.title || '未命名对话' }}
+                    </div>
                     <el-icon
                       v-if="hoveredItemId === item.id"
                       class="delete-icon"
@@ -285,11 +287,12 @@ const loadChatHistoriesFromApi = async () => {
 
       if (apiItem) {
         // API中存在该对话，更新元信息但保留本地消息
-        // 优先使用本地title（因为它是从消息内容生成的，更准确），只有本地没有时才用API的
-        let finalTitle = localItem.title
+        // 优先使用API的title（因为它是用户第一个问题，更准确），只有API没有时才用本地的
+        let finalTitle = apiItem.title
+
         if (!finalTitle || finalTitle === '新对话' || finalTitle === '未命名对话') {
-          // 本地标题无效时，尝试使用API标题
-          finalTitle = apiItem.title || '未命名对话'
+          // API标题无效时，尝试使用本地标题
+          finalTitle = localItem.title || '未命名对话'
         }
 
         const mergedItem = {
@@ -303,7 +306,9 @@ const loadChatHistoriesFromApi = async () => {
         apiMap.delete(localItem.conversationId)
       } else {
         // API中不存在，保留本地数据（可能是离线创建的对话）
-        updatedHistories.push(localItem)
+        updatedHistories.push({
+          ...localItem,
+        })
       }
     })
 
@@ -537,7 +542,7 @@ const handleNameSave = async () => {
   try {
     // 调用后端API更新用户名
     await updateUsername({
-      userId: userId.value,
+      userId: userId.value.toString(),
       newUsername: editableName.value,
     })
 
@@ -593,7 +598,7 @@ const handlePasswordSubmit = async () => {
 
       // 调用后端API修改密码
       await changePassword({
-        userId: userId.value,
+        userId: userId.value.toString(),
         oldPassword: passwordForm.oldPassword,
         newPassword: passwordForm.newPassword,
       })
@@ -636,13 +641,8 @@ const handleForgotPassword = () => {
 // 开启新对话
 const handleNewChat = async () => {
   try {
-    // 获取当前对话ID（如果有的话）
-    const currentConversationId = chatHistory.value.find(
-      (item) => item.id === currentChatId.value,
-    )?.conversationId
-
-    // 调用后端API创建新对话，title设置为"新对话"
-    const newConversationId = await createNewChat('新对话', currentConversationId)
+    // 调用后端API创建初始对话（获取初始ID）
+    const newConversationId = await createNewChat()
 
     // 清空当前对话ID
     currentChatId.value = ''

@@ -288,7 +288,6 @@ import {
   Delete,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useAuthStore } from '@/stores/auth'
 import {
   parseFileContent,
   getConversationId,
@@ -296,13 +295,11 @@ import {
   saveReviewRecord,
   SaveRecordRequest,
   getReviewRecordDetail,
-  FileReviewRecordVO,
   deleteReviewRecord,
   getReviewRecordList,
-  ReviewRecordListVO,
+  downloadFile,
+  FileDownloadRequest,
 } from '@/api/check'
-
-const authStore = useAuthStore()
 
 // 使用 markRaw 优化图标
 const UploadIcon = markRaw(Upload)
@@ -971,7 +968,8 @@ function findTextPosition(
 // 解析审查结果
 function parseReviewResult(reviewText: string) {
   if (!reviewText || typeof reviewText !== 'string') {
-    mockReviewContract(originalContractText.value)
+    ElMessage.error('审查结果格式错误')
+    reviewing.value = false
     return
   }
 
@@ -1088,149 +1086,14 @@ function parseReviewResult(reviewText: string) {
       return
     }
 
-    mockReviewContract(originalContractText.value)
+    // 如果解析失败，显示错误
+    ElMessage.error('审查结果解析失败，请重试')
+    reviewing.value = false
   } catch (error) {
-    mockReviewContract(originalContractText.value)
+    console.error('解析审查结果时出错:', error)
+    ElMessage.error('审查结果解析失败，请重试')
+    reviewing.value = false
   }
-}
-
-// 模拟审查合同（作为回退方案）
-async function mockReviewContract(text: string): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const illegalIssues: Issue[] = []
-      const riskIssues: Issue[] = []
-      const missingIssues: Issue[] = []
-
-      // 检测试用期问题（明显违法）
-      const trialMatch = text.match(/试用期为(\d+)个月/)
-      if (trialMatch) {
-        const trialMonths = parseInt(trialMatch[1])
-        if (trialMonths > 6) {
-          const startIndex = text.indexOf(trialMatch[0])
-          illegalIssues.push({
-            id: 'illegal_1',
-            type: 'illegal',
-            originalText: trialMatch[0],
-            relatedLaw:
-              '《劳动合同法》第十九条：劳动合同期限三个月以上不满一年的，试用期不得超过一个月；劳动合同期限一年以上不满三年的，试用期不得超过二个月；三年以上固定期限和无固定期限的劳动合同，试用期不得超过六个月。',
-            suggestion:
-              authStore.userType === '2'
-                ? '建议将试用期调整为符合法律规定的期限，避免违法风险和潜在的赔偿责任。'
-                : '该试用期约定违反法律规定，您有权要求修改为合法期限，否则可主张试用期无效并要求按正式工资支付差额。',
-            startIndex,
-            endIndex: startIndex + trialMatch[0].length,
-          })
-        }
-      }
-
-      // 检测工作时间问题（明显违法）
-      const workDaysMatch = text.match(/每周工作(\d+)天/)
-      if (workDaysMatch) {
-        const workDays = parseInt(workDaysMatch[1])
-        if (workDays > 5) {
-          const startIndex = text.indexOf(workDaysMatch[0])
-          illegalIssues.push({
-            id: 'illegal_2',
-            type: 'illegal',
-            originalText: workDaysMatch[0],
-            relatedLaw:
-              '《劳动法》第三十六条：国家实行劳动者每日工作时间不超过八小时、平均每周工作时间不超过四十四小时的工时制度。第三十八条：用人单位应当保证劳动者每周至少休息一日。',
-            suggestion:
-              authStore.userType === '2'
-                ? '建议调整为每周工作5天或申请特殊工时制度，同时明确加班费支付标准。'
-                : '该工作时间违反法律规定，您有权要求调整工作时间或获得加班费补偿。',
-            startIndex,
-            endIndex: startIndex + workDaysMatch[0].length,
-          })
-        }
-      }
-
-      // 检测违约金问题（存在风险）
-      const penaltyMatch = text.match(/应向甲方支付违约金\d+元/)
-      if (penaltyMatch) {
-        const startIndex = text.indexOf(penaltyMatch[0])
-        riskIssues.push({
-          id: 'risk_1',
-          type: 'risk',
-          originalText: penaltyMatch[0],
-          relatedLaw:
-            '《劳动合同法》第二十二条、第二十三条：用人单位只能在提供专项培训费用的培训服务期约定和竞业限制约定中约定违约金。',
-          suggestion:
-            authStore.userType === '2'
-              ? '建议删除该违约金条款，或仅在培训服务期和竞业限制中约定违约金，避免条款无效。'
-              : '该违约金条款无效，您有权拒绝支付，用人单位无权以此为由扣留工资或要求赔偿。',
-          startIndex,
-          endIndex: startIndex + penaltyMatch[0].length,
-        })
-      }
-
-      // 检测试用期工资问题（存在风险）
-      const trialSalaryMatch = text.match(/试用期月工资为(\d+)元/)
-      const formalSalaryMatch = text.match(/转正后月工资为(\d+)元/)
-      if (trialSalaryMatch && formalSalaryMatch) {
-        const trialSalary = parseInt(trialSalaryMatch[1])
-        const formalSalary = parseInt(formalSalaryMatch[1])
-        if (trialSalary < formalSalary * 0.8) {
-          const startIndex = text.indexOf(trialSalaryMatch[0])
-          riskIssues.push({
-            id: 'risk_2',
-            type: 'risk',
-            originalText: trialSalaryMatch[0],
-            relatedLaw:
-              '《劳动合同法》第二十条：劳动者在试用期的工资不得低于本单位相同岗位最低档工资或者劳动合同约定工资的百分之八十，并不得低于用人单位所在地的最低工资标准。',
-            suggestion:
-              authStore.userType === '2'
-                ? '建议将试用期工资调整至不低于转正工资的80%，确保符合法律规定。'
-                : '试用期工资过低，您有权要求调整至转正工资的80%以上，并可主张补发差额。',
-            startIndex,
-            endIndex: startIndex + trialSalaryMatch[0].length,
-          })
-        }
-      }
-
-      // 检测缺失条款
-      if (!text.includes('社会保险') && !text.includes('社保')) {
-        missingIssues.push({
-          id: 'missing_1',
-          type: 'missing',
-          originalText: '社会保险条款',
-          relatedLaw:
-            '《劳动合同法》第十七条：劳动合同应当具备社会保险条款。《社会保险法》规定用人单位和劳动者必须依法参加社会保险，缴纳社会保险费。',
-          suggestion:
-            authStore.userType === '2'
-              ? '建议增加社会保险条款，明确社保种类、缴纳基数和比例，避免合规风险。'
-              : '合同缺少社会保险条款，建议要求补充，确保您的社保权益得到保障。',
-          startIndex: 0,
-          endIndex: 0,
-        })
-      }
-
-      if (!text.includes('劳动保护') && !text.includes('劳动条件')) {
-        missingIssues.push({
-          id: 'missing_2',
-          type: 'missing',
-          originalText: '劳动保护和劳动条件条款',
-          relatedLaw:
-            '《劳动合同法》第十七条：劳动合同应当具备劳动保护、劳动条件和职业危害防护等条款。',
-          suggestion:
-            authStore.userType === '2'
-              ? '建议增加劳动保护和劳动条件相关条款，明确工作环境、安全防护措施等。'
-              : '合同缺少劳动保护条款，建议要求补充，保障您的职业健康和安全权益。',
-          startIndex: 0,
-          endIndex: 0,
-        })
-      }
-
-      reviewResult.value = {
-        illegalIssues,
-        riskIssues,
-        missingIssues,
-      }
-
-      resolve()
-    }, 2500)
-  })
 }
 
 // 定位到问题位置
@@ -1313,21 +1176,75 @@ function handleExportCommand(command: string) {
 }
 
 // 导出为PDF
-function exportToPDF() {
-  // TODO: 实现真实的PDF导出功能
-  ElMessage.success('正在导出PDF...')
-  setTimeout(() => {
-    ElMessage.info('PDF导出功能开发中，请稍后...')
-  }, 500)
+async function exportToPDF() {
+  if (!reviewResult.value || !conversationId.value) {
+    ElMessage.warning('没有可导出的内容')
+    return
+  }
+
+  try {
+    ElMessage.info('正在生成PDF文件...')
+
+    const downloadRequest: FileDownloadRequest = {
+      isChange: false, // 默认false，后续可根据实际需求调整
+      conversationId: conversationId.value,
+      contentType: 'pdf',
+      content: contractText.value, // 合同文本内容
+    }
+
+    const blob = await downloadFile(downloadRequest)
+
+    // 创建下载链接
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${currentFileName.value || '合同审查结果'}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+
+    ElMessage.success('PDF文件下载成功')
+  } catch (error: any) {
+    console.error('导出PDF失败:', error)
+    ElMessage.error(error.message || '导出PDF失败，请稍后重试')
+  }
 }
 
 // 导出为Word
-function exportToWord() {
-  // TODO: 实现真实的Word导出功能
-  ElMessage.success('正在导出Word...')
-  setTimeout(() => {
-    ElMessage.info('Word导出功能开发中，请稍后...')
-  }, 500)
+async function exportToWord() {
+  if (!reviewResult.value || !conversationId.value) {
+    ElMessage.warning('没有可导出的内容')
+    return
+  }
+
+  try {
+    ElMessage.info('正在生成Word文件...')
+
+    const downloadRequest: FileDownloadRequest = {
+      isChange: false, // 默认false，后续可根据实际需求调整
+      conversationId: conversationId.value,
+      contentType: 'docx',
+      content: contractText.value, // 合同文本内容
+    }
+
+    const blob = await downloadFile(downloadRequest)
+
+    // 创建下载链接
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${currentFileName.value || '合同审查结果'}.docx`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+
+    ElMessage.success('Word文件下载成功')
+  } catch (error: any) {
+    console.error('导出Word失败:', error)
+    ElMessage.error(error.message || '导出Word失败，请稍后重试')
+  }
 }
 
 // 显示历史记录弹窗

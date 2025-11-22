@@ -19,8 +19,8 @@ export default defineConfig({
 
         // Mock 地址
         // target: 'http://127.0.0.1:4523/m1/7335686-7065687-default',
-        // target: 'http://6312d2cb.r10.vip.cpolar.cn',
-        // target: 'http://21f1e18a.r23.cpolar.top',
+        // target: 'http://2e5390a.r33.cpolar.top',
+        // target: 'http://52ba96af.r20.vip.cpolar.cn',
 
         changeOrigin: true,
       },

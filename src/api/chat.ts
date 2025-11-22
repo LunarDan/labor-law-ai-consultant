@@ -2,7 +2,6 @@ import request from './index'
 import type {
   ChatConsultRequest,
   ChatConsultResponse,
-  SecondaryQuestionTitlesResponse,
   SecondaryQuestionTitle,
   ChatHistoryMessage,
   ConversationMeta,
@@ -51,19 +50,17 @@ export const chatConsult = async (
 /**
  * 查询常见问题二级标题
  * @param userType 用户类型（1: 个人用户, 2: 企业用户）
- * @returns 二级标题列表
+ * @returns 二级标题列表（二维数组）
  */
 export const getSecondaryQuestionTitles = async (
   userType: 1 | 2,
 ): Promise<SecondaryQuestionTitle[][]> => {
   // 注意：axios拦截器已经处理了响应，返回的就是 response.data.data
   // 所以这里的 response 直接就是数据数组（二维数组）
-  const response = await request.get<SecondaryQuestionTitle[][]>(
-    `/chat/secondary-question-titles/${userType}`,
-  )
+  const response = await request.get(`/chat/secondary_question_titles/${userType}`)
 
   // response 本身就是二级标题数组（二维），不需要再访问 .data
-  return response || []
+  return (response as unknown as SecondaryQuestionTitle[][]) || []
 }
 
 /**
@@ -73,12 +70,12 @@ export const getSecondaryQuestionTitles = async (
  */
 export const getChatHistory = async (conversationId: string): Promise<ChatHistoryMessage[]> => {
   // axios拦截器已经处理了响应，返回的就是 response.data.data
-  const response = await request.get<ChatHistoryMessage[]>(`/chat/history`, {
+  const response = await request.get(`/chat/history`, {
     params: { conversationId },
   })
 
   // response 本身就是消息数组
-  return response || []
+  return (response as unknown as ChatHistoryMessage[]) || []
 }
 
 /**
@@ -88,12 +85,12 @@ export const getChatHistory = async (conversationId: string): Promise<ChatHistor
  */
 export const getChatHistories = async (userId: number): Promise<ConversationMeta[]> => {
   // axios拦截器已经处理了响应，返回的就是 response.data.data
-  const response = await request.get<ConversationMeta[]>(`/chat/histories`, {
+  const response = await request.get(`/chat/histories`, {
     params: { userId },
   })
 
   // response 本身就是对话元信息数组
-  return response || []
+  return (response as unknown as ConversationMeta[]) || []
 }
 
 /**
@@ -109,23 +106,37 @@ export const deleteChatHistory = async (conversationId: string): Promise<void> =
 }
 
 /**
- * 创建新对话
- * @param title 对话标题
- * @param currentConversationId 当前对话ID（可选）
- * @returns 新的对话ID
+ * 创建新对话（初始化）
+ * 用户进入AI咨询页面时调用，不需要传参数
+ * @returns 初始的对话ID（字符串）
  */
-export const createNewChat = async (
+export const createNewChat = async (): Promise<string> => {
+  // axios拦截器已经处理了响应，返回的就是 response.data.data
+  const response = await request.post(`/chat/newOr`)
+
+  // response 本身就是新的 conversationId（字符串）
+  return (response as unknown as string) || ''
+}
+
+/**
+ * 创建新对话（带标题）
+ * 用户发送第一个问题或点击新建对话时调用
+ * @param title 对话标题（用户的第一个问题）
+ * @param currentConversationId 当前对话ID（从 /chat/newOr 返回的ID）
+ * @returns 新的对话ID（字符串）
+ */
+export const createNewChatWithTitle = async (
   title: string,
-  currentConversationId?: string,
+  currentConversationId: string,
 ): Promise<string> => {
   // axios拦截器已经处理了响应，返回的就是 response.data.data
-  const response = await request.post<string>(`/chat/new`, null, {
+  const response = await request.post(`/chat/new`, null, {
     params: {
       title,
-      ...(currentConversationId && { currentConversationId }),
+      currentConversationId,
     },
   })
 
-  // response 本身就是新的 conversationId
-  return response || ''
+  // response 本身就是新的 conversationId（字符串）
+  return (response as unknown as string) || ''
 }

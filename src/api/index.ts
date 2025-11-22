@@ -6,7 +6,7 @@ import axios, {
 
 const request: AxiosInstance = axios.create({
   baseURL: '/api',
-  timeout: 30000,
+  timeout: 500000, // 增加到60秒，因为知识库查询涉及AI处理
 })
 
 // 刷新 token 的状态管理
