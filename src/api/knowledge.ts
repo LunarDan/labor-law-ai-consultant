@@ -82,6 +82,7 @@ export interface RelevantCase {
  * 知识库单条法规数据
  */
 export interface KnowledgeRegulationItem {
+  regulationId?: number // 法则ID（可选，搜索API可能返回）
   lawName: string // 法律名称，如"使用有毒物品作业场所劳动保护条例_20241206"
   regulationContent: string // 法规原文内容
   aiTranslateContent: string // AI翻译/解析内容

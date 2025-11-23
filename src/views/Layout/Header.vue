@@ -239,7 +239,37 @@ const loadChatHistory = () => {
   if (stored) {
     try {
       const data = JSON.parse(stored)
-      chatHistory.value = data
+
+      // 去重：使用 conversationId 作为唯一标识
+      const uniqueMap = new Map<string, ChatHistory>()
+      data.forEach((item: ChatHistory) => {
+        if (item.conversationId) {
+          // 如果已存在相同conversationId的记录，保留消息更多或更新时间更晚的那个
+          const existing = uniqueMap.get(item.conversationId)
+          if (!existing) {
+            uniqueMap.set(item.conversationId, item)
+          } else {
+            // 比较哪个记录更完整
+            const existingMsgCount = existing.messages?.length || 0
+            const currentMsgCount = item.messages?.length || 0
+            const existingTime = new Date(existing.updatedAt || existing.createdAt).getTime()
+            const currentTime = new Date(item.updatedAt || item.createdAt).getTime()
+
+            // 优先保留消息更多的，如果消息数量相同则保留时间更晚的
+            if (
+              currentMsgCount > existingMsgCount ||
+              (currentMsgCount === existingMsgCount && currentTime > existingTime)
+            ) {
+              uniqueMap.set(item.conversationId, item)
+            }
+          }
+        } else {
+          // 没有conversationId的记录，使用id作为key（临时对话）
+          uniqueMap.set(item.id, item)
+        }
+      })
+
+      chatHistory.value = Array.from(uniqueMap.values())
     } catch (e) {
       console.error('Failed to load chat history:', e)
       chatHistory.value = []
@@ -264,7 +294,7 @@ const loadChatHistoriesFromApi = async () => {
 
     const apiHistories = await getChatHistories(parseInt(userDbId.toString()))
 
-    // 先从localStorage加载现有数据
+    // 先从localStorage加载现有数据（已经去重）
     loadChatHistory()
     const existingData = [...chatHistory.value]
 
@@ -285,17 +315,35 @@ const loadChatHistoriesFromApi = async () => {
       )
     })
 
-    // 创建conversationId到API数据的映射
+    // 创建conversationId到API数据的映射（去重：相同conversationId只保留一个）
     const apiMap = new Map<string, ConversationMeta>()
     validApiHistories.forEach((item) => {
-      apiMap.set(item.conversationId, item)
+      // 如果已存在，保留更新时间更晚的
+      const existing = apiMap.get(item.conversationId)
+      if (!existing) {
+        apiMap.set(item.conversationId, item)
+      } else {
+        const existingTime = new Date(existing.updatedAt).getTime()
+        const currentTime = new Date(item.updatedAt).getTime()
+        if (currentTime > existingTime) {
+          apiMap.set(item.conversationId, item)
+        }
+      }
     })
 
-    // 更新现有数据的元信息
-    const updatedHistories: ChatHistory[] = []
+    // 使用 Map 来确保 conversationId 唯一性
+    const mergedMap = new Map<string, ChatHistory>()
 
+    // 先处理本地数据
     existingData.forEach((localItem) => {
-      const apiItem = apiMap.get(localItem.conversationId)
+      const conversationId = localItem.conversationId
+      if (!conversationId) {
+        // 没有conversationId的临时对话，用id作为key
+        mergedMap.set(localItem.id, localItem)
+        return
+      }
+
+      const apiItem = apiMap.get(conversationId)
 
       if (apiItem) {
         // API中存在该对话，更新元信息但保留本地消息
@@ -313,32 +361,40 @@ const loadChatHistoriesFromApi = async () => {
           createdAt: apiItem.createdAt,
           updatedAt: apiItem.updatedAt,
         }
-        updatedHistories.push(mergedItem)
+        mergedMap.set(conversationId, mergedItem)
         // 从映射中移除已处理的项
-        apiMap.delete(localItem.conversationId)
+        apiMap.delete(conversationId)
       } else {
         // API中不存在，保留本地数据（可能是离线创建的对话）
-        updatedHistories.push({
-          ...localItem,
-        })
+        mergedMap.set(conversationId, localItem)
       }
     })
 
     // 处理API中有但本地没有的对话（这些需要后续通过getChatHistory加载消息）
     apiMap.forEach((apiItem) => {
-      const newItem = {
-        id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      const conversationId = apiItem.conversationId
+
+      // 检查Map中是否已经存在（防止重复）
+      if (mergedMap.has(conversationId)) {
+        return
+      }
+
+      // 使用conversationId生成稳定的本地ID
+      const stableId = `chat_api_${conversationId}`
+
+      const newItem: ChatHistory = {
+        id: stableId,
         title: apiItem.title || '未命名对话',
         messages: [], // 标记为需要从API加载
-        conversationId: apiItem.conversationId,
+        conversationId: conversationId,
         createdAt: apiItem.createdAt,
         updatedAt: apiItem.updatedAt,
       }
-      updatedHistories.push(newItem)
+      mergedMap.set(conversationId, newItem)
     })
 
-    // 强制使用新数组触发响应式更新
-    chatHistory.value = [...updatedHistories]
+    // 将Map转换为数组，确保唯一性
+    chatHistory.value = Array.from(mergedMap.values())
 
     // 延迟保存，确保UI先更新
     nextTick(() => {
@@ -353,8 +409,52 @@ const loadChatHistoriesFromApi = async () => {
   }
 }
 
-// 保存历史对话到 localStorage
+// 保存历史对话到 localStorage（保存前自动去重和清理）
 const saveChatHistory = () => {
+  // 去重：使用 conversationId 作为唯一标识
+  const uniqueMap = new Map<string, ChatHistory>()
+
+  chatHistory.value.forEach((item) => {
+    const key = item.conversationId || item.id
+    if (!key) return
+
+    // 过滤掉空对话（超过5分钟还没有消息的记录）
+    const hasMessages = item.messages && item.messages.length > 0
+    if (!hasMessages) {
+      const createdTime = new Date(item.createdAt || item.updatedAt).getTime()
+      const now = Date.now()
+      const ageInMinutes = (now - createdTime) / 1000 / 60
+
+      // 如果是超过5分钟的空对话，跳过不保存
+      if (ageInMinutes > 5) {
+        console.log(`🗑️ 清理空对话记录: ${item.title}`)
+        return
+      }
+    }
+
+    const existing = uniqueMap.get(key)
+    if (!existing) {
+      uniqueMap.set(key, item)
+    } else {
+      // 保留消息更多或更新时间更晚的记录
+      const existingMsgCount = existing.messages?.length || 0
+      const currentMsgCount = item.messages?.length || 0
+      const existingTime = new Date(existing.updatedAt || existing.createdAt).getTime()
+      const currentTime = new Date(item.updatedAt || item.createdAt).getTime()
+
+      if (
+        currentMsgCount > existingMsgCount ||
+        (currentMsgCount === existingMsgCount && currentTime > existingTime)
+      ) {
+        uniqueMap.set(key, item)
+      }
+    }
+  })
+
+  // 更新内存中的数据（去重后）
+  chatHistory.value = Array.from(uniqueMap.values())
+
+  // 保存到localStorage
   localStorage.setItem('chat_history', JSON.stringify(chatHistory.value))
 }
 
@@ -362,8 +462,13 @@ const saveChatHistory = () => {
 const groupedHistory = computed(() => {
   const groups: Record<string, ChatHistory[]> = {}
 
-  // 按更新时间倒序排序
-  const sorted = [...chatHistory.value].sort((a, b) => {
+  // 过滤掉空对话（没有消息的记录），然后按更新时间倒序排序
+  const filtered = chatHistory.value.filter((item) => {
+    // 只显示有消息内容的对话，过滤掉空对话
+    return item.messages && item.messages.length > 0
+  })
+
+  const sorted = [...filtered].sort((a, b) => {
     const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
     const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
     return timeB - timeA

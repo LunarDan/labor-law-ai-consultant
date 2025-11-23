@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>历史对话清理工具</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 800px;
+      width: 100%;
+      padding: 40px;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .status-box {
+      background: #f7f9fc;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .status-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #e1e8ed;
+    }
+
+    .status-item:last-child {
+      border-bottom: none;
+    }
+
+    .status-label {
+      color: #666;
+      font-weight: 500;
+    }
+
+    .status-value {
+      color: #333;
+      font-weight: 600;
+    }
+
+    .status-value.error {
+      color: #f56c6c;
+    }
+
+    .status-value.success {
+      color: #67c23a;
+    }
+
+    .status-value.warning {
+      color: #e6a23c;
+    }
+
+    .button-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button.secondary {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+    }
+
+    button.secondary:hover {
+      box-shadow: 0 6px 20px rgba(245, 87, 108, 0.6);
+    }
+
+    button.danger {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+      box-shadow: 0 4px 15px rgba(250, 112, 154, 0.4);
+    }
+
+    button.danger:hover {
+      box-shadow: 0 6px 20px rgba(250, 112, 154, 0.6);
+    }
+
+    .log-box {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border-radius: 8px;
+      padding: 20px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 20px;
+    }
+
+    .log-item {
+      margin-bottom: 5px;
+    }
+
+    .log-success {
+      color: #4ec9b0;
+    }
+
+    .log-error {
+      color: #f48771;
+    }
+
+    .log-warning {
+      color: #dcdcaa;
+    }
+
+    .log-info {
+      color: #9cdcfe;
+    }
+
+    .detail-list {
+      margin-top: 20px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .detail-item {
+      background: #f7f9fc;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+    }
+
+    .detail-item.duplicate {
+      border-left-color: #e6a23c;
+      background: #fef6e6;
+    }
+
+    .detail-item.empty {
+      border-left-color: #f56c6c;
+      background: #fee;
+    }
+
+    .detail-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 5px;
+    }
+
+    .detail-meta {
+      font-size: 12px;
+      color: #666;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>🔧 历史对话清理工具</h1>
+    <p class="subtitle">修复重复对话和空对话问题</p>
+
+    <div class="status-box" id="statusBox">
+      <div class="status-item">
+        <span class="status-label">历史记录总数</span>
+        <span class="status-value" id="totalCount">-</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">重复对话</span>
+        <span class="status-value error" id="duplicateCount">-</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">空对话</span>
+        <span class="status-value warning" id="emptyCount">-</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">有效对话</span>
+        <span class="status-value success" id="validCount">-</span>
+      </div>
+    </div>
+
+    <div class="button-group">
+      <button onclick="analyzeHistory()">📊 分析历史记录</button>
+      <button class="secondary" onclick="cleanHistory()">🧹 清理重复和空记录</button>
+      <button class="danger" onclick="clearAll()">🗑️ 清空所有记录</button>
+    </div>
+
+    <div id="detailList" class="detail-list" style="display: none;"></div>
+
+    <div class="log-box" id="logBox">
+      <div class="log-item log-info">🔹 等待操作...</div>
+    </div>
+  </div>
+
+  <script>
+    function log(message, type = 'info') {
+      const logBox = document.getElementById('logBox');
+      const timestamp = new Date().toLocaleTimeString();
+      const icons = {
+        info: '🔹',
+        success: '✅',
+        error: '❌',
+        warning: '⚠️'
+      };
+      const logItem = document.createElement('div');
+      logItem.className = `log-item log-${type}`;
+      logItem.textContent = `[${timestamp}] ${icons[type]} ${message}`;
+      logBox.appendChild(logItem);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function updateStatus(total, duplicate, empty, valid) {
+      document.getElementById('totalCount').textContent = total;
+      document.getElementById('duplicateCount').textContent = duplicate;
+      document.getElementById('emptyCount').textContent = empty;
+      document.getElementById('validCount').textContent = valid;
+    }
+
+    function analyzeHistory() {
+      log('开始分析历史记录...', 'info');
+
+      const stored = localStorage.getItem('chat_history');
+      if (!stored) {
+        log('没有找到历史记录', 'warning');
+        updateStatus(0, 0, 0, 0);
+        return;
+      }
+
+      try {
+        const data = JSON.parse(stored);
+        const total = data.length;
+
+        // 分析重复的 conversationId
+        const conversationIds = data.map(h => h.conversationId).filter(Boolean);
+        const uniqueIds = new Set(conversationIds);
+        const duplicateCount = conversationIds.length - uniqueIds.size;
+
+        // 分析空对话
+        const emptyDialogs = data.filter(item => !item.messages || item.messages.length === 0);
+        const emptyCount = emptyDialogs.length;
+
+        // 有效对话
+        const validCount = total - duplicateCount - emptyCount;
+
+        updateStatus(total, duplicateCount, emptyCount, validCount);
+
+        log(`分析完成！共 ${total} 条记录`, 'success');
+        if (duplicateCount > 0) {
+          log(`发现 ${duplicateCount} 条重复记录`, 'warning');
+        }
+        if (emptyCount > 0) {
+          log(`发现 ${emptyCount} 条空记录`, 'warning');
+        }
+
+        // 显示详细列表
+        showDetails(data, duplicateCount, emptyCount);
+
+      } catch (e) {
+        log(`分析失败: ${e.message}`, 'error');
+      }
+    }
+
+    function showDetails(data, duplicateCount, emptyCount) {
+      const detailList = document.getElementById('detailList');
+      detailList.innerHTML = '';
+      detailList.style.display = 'block';
+
+      if (duplicateCount === 0 && emptyCount === 0) {
+        detailList.innerHTML = '<div class="detail-item"><div class="detail-title">✅ 所有记录都正常！</div></div>';
+        return;
+      }
+
+      // 找出重复的记录
+      const conversationIdMap = new Map();
+      data.forEach((item, index) => {
+        if (item.conversationId) {
+          if (!conversationIdMap.has(item.conversationId)) {
+            conversationIdMap.set(item.conversationId, []);
+          }
+          conversationIdMap.get(item.conversationId).push({ ...item, originalIndex: index });
+        }
+      });
+
+      // 显示重复记录
+      conversationIdMap.forEach((items, conversationId) => {
+        if (items.length > 1) {
+          items.forEach((item, idx) => {
+            const div = document.createElement('div');
+            div.className = 'detail-item duplicate';
+            div.innerHTML = `
+                            <div class="detail-title">🔄 重复记录 ${idx + 1}/${items.length}: ${item.title || '未命名'}</div>
+                            <div class="detail-meta">
+                                对话ID: ${conversationId}<br>
+                                消息数量: ${item.messages?.length || 0}<br>
+                                更新时间: ${item.updatedAt || item.createdAt || '未知'}
+                            </div>
+                        `;
+            detailList.appendChild(div);
+          });
+        }
+      });
+
+      // 显示空记录
+      data.forEach((item, index) => {
+        if (!item.messages || item.messages.length === 0) {
+          const div = document.createElement('div');
+          div.className = 'detail-item empty';
+          div.innerHTML = `
+                        <div class="detail-title">📭 空记录: ${item.title || '未命名'}</div>
+                        <div class="detail-meta">
+                            对话ID: ${item.conversationId || 'N/A'}<br>
+                            创建时间: ${item.createdAt || '未知'}
+                        </div>
+                    `;
+          detailList.appendChild(div);
+        }
+      });
+    }
+
+    function cleanHistory() {
+      log('开始清理历史记录...', 'info');
+
+      const stored = localStorage.getItem('chat_history');
+      if (!stored) {
+        log('没有找到历史记录', 'warning');
+        return;
+      }
+
+      try {
+        const data = JSON.parse(stored);
+        const originalCount = data.length;
+
+        // 去重和清理
+        const uniqueMap = new Map();
+        let removedDuplicates = 0;
+        let removedEmpty = 0;
+
+        data.forEach(item => {
+          // 跳过空对话
+          if (!item.messages || item.messages.length === 0) {
+            removedEmpty++;
+            log(`移除空对话: ${item.title || '未命名'}`, 'warning');
+            return;
+          }
+
+          const key = item.conversationId || item.id;
+          if (!key) return;
+
+          const existing = uniqueMap.get(key);
+          if (!existing) {
+            uniqueMap.set(key, item);
+          } else {
+            // 保留消息更多的记录
+            const existingMsgCount = existing.messages?.length || 0;
+            const currentMsgCount = item.messages?.length || 0;
+            const existingTime = new Date(existing.updatedAt || existing.createdAt).getTime();
+            const currentTime = new Date(item.updatedAt || item.createdAt).getTime();
+
+            if (currentMsgCount > existingMsgCount ||
+              (currentMsgCount === existingMsgCount && currentTime > existingTime)) {
+              log(`替换重复记录: ${item.title}`, 'info');
+              uniqueMap.set(key, item);
+            } else {
+              log(`移除重复记录: ${item.title}`, 'warning');
+            }
+            removedDuplicates++;
+          }
+        });
+
+        const cleanedData = Array.from(uniqueMap.values());
+        const finalCount = cleanedData.length;
+
+        // 保存清理后的数据
+        localStorage.setItem('chat_history', JSON.stringify(cleanedData));
+
+        log('清理完成！', 'success');
+        log(`原始记录: ${originalCount} 条`, 'info');
+        log(`移除重复: ${removedDuplicates} 条`, 'warning');
+        log(`移除空对话: ${removedEmpty} 条`, 'warning');
+        log(`保留记录: ${finalCount} 条`, 'success');
+        log('即将刷新页面...', 'info');
+
+        // 更新状态
+        updateStatus(finalCount, 0, 0, finalCount);
+
+        // 2秒后刷新页面
+        setTimeout(() => {
+          window.opener?.location.reload();
+          location.reload();
+        }, 2000);
+
+      } catch (e) {
+        log(`清理失败: ${e.message}`, 'error');
+      }
+    }
+
+    function clearAll() {
+      if (!confirm('⚠️ 确定要清空所有历史记录吗？此操作不可恢复！')) {
+        return;
+      }
+
+      log('清空所有历史记录...', 'warning');
+      localStorage.removeItem('chat_history');
+      log('已清空所有记录', 'success');
+      updateStatus(0, 0, 0, 0);
+      document.getElementById('detailList').style.display = 'none';
+
+      setTimeout(() => {
+        window.opener?.location.reload();
+        location.reload();
+      }, 1000);
+    }
+
+    // 页面加载时自动分析
+    window.onload = () => {
+      log('工具已就绪', 'success');
+      analyzeHistory();
+    };
+  </script>
+</body>
+
+</html>

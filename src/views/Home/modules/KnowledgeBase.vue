@@ -581,9 +581,18 @@ function convertNewApiDataToArticles(responseData: KnowledgeQueryResponseData): 
     // 移除法律名称后的日期后缀，如"_20241206"
     const cleanLawName = item.lawName.replace(/_\d{8}$/, '')
 
+    // 检查并记录regulationId状态
+    if (!item.regulationId) {
+      console.warn(`⚠️ 法条缺少regulationId: ${cleanLawName} 第${item.articleNumber}条`)
+    } else {
+      console.log(
+        `✅ 法条包含regulationId(${item.regulationId}): ${cleanLawName} 第${item.articleNumber}条`,
+      )
+    }
+
     return {
       id: `article-${item.articleNumber}-${index}`,
-      regulationId: undefined, // 新API暂不返回regulationId
+      regulationId: item.regulationId, // 使用API返回的regulationId（如果有）
       lawName: cleanLawName,
       articleNumber: `第${item.articleNumber}条`,
       title: `${cleanLawName} 第${item.articleNumber}条`,
@@ -1418,13 +1427,25 @@ function handleScroll() {
 async function toggleFavoriteArticle(article: LawArticle) {
   // 检查是否有 regulationId
   if (!article.regulationId) {
-    ElMessage.warning('该法条无法收藏')
+    console.warn('⚠️ 法条缺少regulationId:', {
+      lawName: article.lawName,
+      articleNumber: article.articleNumber,
+      title: article.title,
+      category: article.category,
+    })
+    ElMessage.warning('该法条暂不支持收藏功能，请联系管理员（缺少法条ID）')
     return
   }
 
   const newStatus = !article.isFavorite
 
   try {
+    console.log(`${newStatus ? '📌 收藏' : '🗑️ 取消收藏'}法条:`, {
+      regulationId: article.regulationId,
+      lawName: article.lawName,
+      articleNumber: article.articleNumber,
+    })
+
     // 调用API
     if (newStatus) {
       await addFavorite(article.regulationId)
