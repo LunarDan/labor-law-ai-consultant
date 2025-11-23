@@ -11,7 +11,7 @@ import './assets/css/main.scss'
 const app = createApp(App)
 
 // 全局错误处理
-app.config.errorHandler = (err, instance, info) => {
+app.config.errorHandler = (err, _instance, info) => {
   console.error('全局错误捕获:', err, info)
   ElMessage.error({
     message: '应用发生错误，请刷新页面重试',
@@ -21,7 +21,7 @@ app.config.errorHandler = (err, instance, info) => {
 
 // 全局警告处理（开发环境）
 if (import.meta.env.MODE === 'development') {
-  app.config.warnHandler = (msg, instance, trace) => {
+  app.config.warnHandler = (msg, _instance, trace) => {
     console.warn('Vue警告:', msg, trace)
   }
 }

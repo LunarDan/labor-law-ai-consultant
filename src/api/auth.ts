@@ -8,17 +8,18 @@ import type {
   UpdateUsernameRequest,
   RefreshTokenResponse,
   UserInfo,
-  GetUserInfoResponse,
 } from '@/types'
 
 // 登录
 export const login = (data: LoginForm): Promise<LoginResponse> => {
-  return request.post('/user/login', data)
+  return request.post('/user/login', data) as Promise<LoginResponse>
 }
 
 // 刷新 Token
 export const refreshToken = (refreshToken: string): Promise<RefreshTokenResponse> => {
-  return request.get('/user/refresh-token', { params: { refreshToken } })
+  return request.get('/user/refresh-token', {
+    params: { refreshToken },
+  }) as Promise<RefreshTokenResponse>
 }
 
 // 注册
@@ -29,9 +30,9 @@ export const register = (data: any): Promise<any> => {
 // 获取用户信息
 export const getUserInfo = (userId: number | string): Promise<UserInfo> => {
   // 根据API文档，参数名为userId，类型为integer
-  return request.get<UserInfo>('/user/info', {
+  return request.get('/user/info', {
     params: { userId: parseInt(userId.toString()) },
-  })
+  }) as Promise<UserInfo>
 }
 
 // 获取验证码（POST 方法，参数在 Query）

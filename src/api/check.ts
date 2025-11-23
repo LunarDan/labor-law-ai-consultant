@@ -20,14 +20,14 @@ export const submitFileReview = async (
   fileName: string,
 ): Promise<ReviewResult> => {
   // axios拦截器已经处理了响应，返回的就是 response.data.data
-  const response = await request.post<ReviewResult>(`/file/review`, {
+  const response = await request.post(`/file/review`, {
     text,
     conversationId,
     fileName,
   })
 
   // response 本身就是审查结果数据
-  return response
+  return response as unknown as ReviewResult
 }
 
 /**
@@ -36,10 +36,10 @@ export const submitFileReview = async (
  */
 export const getConversationId = async (): Promise<string> => {
   // axios拦截器已经处理了响应，返回的就是 response.data.data
-  const response = await request.post<string>(`/file/review/getId`)
+  const response = await request.post(`/file/review/getId`)
 
   // response 本身就是对话ID字符串
-  return response || ''
+  return (response as unknown as string) || ''
 }
 
 // 保存审查记录的响应接口
@@ -118,14 +118,14 @@ export const saveReviewRecord = async (
     if (response && typeof response === 'object') {
       // 如果有success字段，说明是完整的响应对象
       if ('success' in response) {
-        return response as SaveRecordResponse
+        return response as unknown as SaveRecordResponse
       }
 
       // 如果没有success字段，构造一个默认的响应对象
       return {
         code: 200,
         message: '保存成功',
-        data: response.toString(),
+        data: String(response),
         success: true,
         timestamp: Date.now(),
       } as SaveRecordResponse
@@ -135,7 +135,7 @@ export const saveReviewRecord = async (
     return {
       code: 200,
       message: '保存成功',
-      data: response?.toString() || '',
+      data: String(response || ''),
       success: true,
       timestamp: Date.now(),
     } as SaveRecordResponse
@@ -178,7 +178,7 @@ export const getReviewRecordDetail = async (recordId: string): Promise<GetRecord
     if (response && typeof response === 'object') {
       // 如果有success字段，说明是完整的响应对象
       if ('success' in response && 'data' in response) {
-        return response as GetRecordDetailResponse
+        return response as unknown as GetRecordDetailResponse
       }
 
       // 如果没有success字段但有data，构造响应对象
@@ -186,7 +186,7 @@ export const getReviewRecordDetail = async (recordId: string): Promise<GetRecord
         return {
           code: 200,
           message: '获取成功',
-          data: response as FileReviewRecordVO,
+          data: response as unknown as FileReviewRecordVO,
           success: true,
           timestamp: Date.now(),
         }
@@ -229,12 +229,14 @@ export const getReviewRecordList = async (): Promise<GetRecordListResponse> => {
     if (response && typeof response === 'object') {
       // 如果有success字段，说明是完整的响应对象
       if ('success' in response && 'data' in response) {
-        return response as GetRecordListResponse
+        return response as unknown as GetRecordListResponse
       }
 
       // 如果没有success字段但有records数组，构造响应对象
       if ('records' in response || Array.isArray(response)) {
-        const records = Array.isArray(response) ? response : response.records || []
+        const records = Array.isArray(response)
+          ? response
+          : (response.records as unknown as FileReviewRecordVO[]) || []
         return {
           code: 200,
           message: '获取成功',
@@ -295,7 +297,7 @@ export const deleteReviewRecord = async (recordId: string): Promise<DeleteRecord
     if (response && typeof response === 'object') {
       // 如果有success字段，说明是完整的响应对象
       if ('success' in response) {
-        return response as DeleteRecordResponse
+        return response as unknown as DeleteRecordResponse
       }
 
       // 如果没有success字段，构造响应对象
@@ -348,14 +350,14 @@ export const parseFileContent = async (file: File): Promise<FileParseResult> => 
   formData.append('file', file)
 
   // 发送文件解析请求
-  const response = await request.post<FileParseResult>(`/file/upAndwrite`, formData, {
+  const response = await request.post(`/file/upAndwrite`, formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
   })
 
   // response 本身就是解析结果数据
-  return response
+  return response as unknown as FileParseResult
 }
 
 /**
@@ -377,5 +379,5 @@ export const downloadFile = async (data: FileDownloadRequest): Promise<Blob> => 
   const response = await request.post('/file/download', data, {
     responseType: 'blob', // 重要：指定响应类型为blob
   })
-  return response as Blob
+  return response as unknown as Blob
 }
