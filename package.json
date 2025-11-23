@@ -1,11 +1,12 @@
 {
   "name": "labor-law-ai-consultant",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "vite --mode development",
+    "build": "vue-tsc && vite build --mode production",
+    "build:dev": "vue-tsc && vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint . --ext .vue,.ts",
     "lint:fix": "npm run lint -- --fix",

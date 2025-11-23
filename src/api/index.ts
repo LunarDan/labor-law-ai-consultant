@@ -4,9 +4,16 @@ import axios, {
   type AxiosResponse,
 } from 'axios'
 
+// 从环境变量获取配置
+const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+const timeout = Number(import.meta.env.VITE_API_TIMEOUT) || 60000 // 默认60秒
+
 const request: AxiosInstance = axios.create({
-  baseURL: '/api',
-  timeout: 500000, // 增加到60秒，因为知识库查询涉及AI处理
+  baseURL,
+  timeout,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 })
 
 // 刷新 token 的状态管理

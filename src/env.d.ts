@@ -5,3 +5,16 @@ declare module '*.vue' {
   const component: DefineComponent<{}, {}, any>
   export default component
 }
+
+// 环境变量类型声明
+interface ImportMetaEnv {
+  readonly VITE_APP_TITLE: string
+  readonly VITE_APP_ENV: string
+  readonly VITE_API_BASE_URL: string
+  readonly VITE_API_TIMEOUT: string
+  readonly VITE_PROXY_TARGET: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}
