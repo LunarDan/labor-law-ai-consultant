@@ -271,7 +271,6 @@ const loadChatHistory = () => {
 
       chatHistory.value = Array.from(uniqueMap.values())
     } catch (e) {
-      console.error('Failed to load chat history:', e)
       chatHistory.value = []
     }
   }
@@ -281,14 +280,12 @@ const loadChatHistory = () => {
 const loadChatHistoriesFromApi = async () => {
   try {
     if (!authStore.userInfo?.id) {
-      console.warn('用户信息缺失，无法加载历史对话')
       return
     }
 
     // 使用数据库主键ID调用API（不是6位数userId）
     const userDbId = authStore.userInfo.id
     if (!userDbId) {
-      console.error('用户数据库ID缺失，无法查询历史对话')
       return
     }
 
@@ -401,7 +398,6 @@ const loadChatHistoriesFromApi = async () => {
       saveChatHistory()
     })
   } catch (error) {
-    console.error('从API加载历史对话元信息失败:', error)
     // API失败时确保不丢失本地数据
     if (chatHistory.value.length === 0) {
       loadChatHistory()
@@ -427,7 +423,6 @@ const saveChatHistory = () => {
 
       // 如果是超过5分钟的空对话，跳过不保存
       if (ageInMinutes > 5) {
-        console.log(`🗑️ 清理空对话记录: ${item.title}`)
         return
       }
     }
@@ -510,7 +505,7 @@ const handleHistoryUpdate = async () => {
   try {
     await loadChatHistoriesFromApi()
   } catch (error) {
-    console.warn('同步API数据失败，使用本地数据:', error)
+    // 同步API数据失败，使用本地数据
   }
 }
 
@@ -522,7 +517,6 @@ const toggleHistoryPopover = async () => {
     try {
       await loadChatHistoriesFromApi()
     } catch (error) {
-      console.warn('从API同步数据失败，使用本地数据:', error)
       // API失败时，确保加载本地数据
       if (chatHistory.value.length === 0) {
         loadChatHistory()
@@ -658,8 +652,11 @@ const handleNameSave = async () => {
 
   try {
     // 调用后端API更新用户名
+    // 根据接口文档，userId 必须是 integer 类型
+    const userIdNumber = authStore.userInfo?.id || 0
+
     await updateUsername({
-      userId: userId.value.toString(),
+      userId: userIdNumber,
       newUsername: editableName.value,
     })
 
@@ -714,8 +711,11 @@ const handlePasswordSubmit = async () => {
       }
 
       // 调用后端API修改密码
+      // 根据接口文档，userId 必须是 integer 类型
+      const userIdNumber = authStore.userInfo?.id || 0
+
       await changePassword({
-        userId: userId.value.toString(),
+        userId: userIdNumber,
         oldPassword: passwordForm.oldPassword,
         newPassword: passwordForm.newPassword,
       })
@@ -772,7 +772,6 @@ const handleNewChat = async () => {
       }),
     )
   } catch (error) {
-    console.error('创建新对话失败:', error)
     ElMessage.error('创建新对话失败，请稍后重试')
   }
 }
@@ -843,7 +842,6 @@ const deleteChat = async (chatId: string) => {
 
     ElMessage.success('删除成功')
   } catch (error) {
-    console.error('删除对话失败:', error)
     ElMessage.error('删除失败，请稍后重试')
   }
 }

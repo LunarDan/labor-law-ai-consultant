@@ -88,6 +88,7 @@ export interface KnowledgeRegulationItem {
   aiTranslateContent: string // AI翻译/解析内容
   relevantCases: RelevantCase[] // 相关案例列表
   relevantQuestions: string[] // 相关问题列表
+  relatedRegulationList?: string[] // 关联法条列表（字符串数组，如"劳动合同法第四条"）
   articleNumber: number // 条款编号（第几条）
   totalArticles: number // 该法律总条款数
   issueYear: string | null // 发布年份

@@ -83,9 +83,15 @@ request.interceptors.response.use(
     isRefreshing = true
 
     try {
-      // 调用刷新接口 - 使用GET方法，refreshToken作为query参数
-      const response = await axios.get(`${request.defaults.baseURL}/user/refresh-token`, {
+      // 获取当前的 accessToken（虽然已过期，但刷新接口需要在 header 中传递）
+      const currentToken = localStorage.getItem('token')
+
+      // 调用刷新接口 - 使用POST方法，refreshToken作为query参数
+      const response = await axios.post(`${request.defaults.baseURL}/user/refresh-token`, null, {
         params: { refreshToken },
+        headers: {
+          Authorization: `Bearer ${currentToken}`,
+        },
       })
 
       // 处理后端返回的data嵌套结构

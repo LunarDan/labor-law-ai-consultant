@@ -172,15 +172,15 @@
           {{ recommendationText }}
         </div>
 
-        <!-- 搜索结果统计 -->
-        <div v-if="searchKeyword && articles.length > 0" class="search-result-info">
-          找到 <span class="result-count">{{ articles.length }}</span> 条相关法条
-        </div>
-
         <!-- 法条列表 -->
         <div v-if="!loading && articles.length > 0" class="articles-wrapper">
-          <!-- 当前显示的条款编号 -->
-          <div class="article-indicator">
+          <!-- 搜索结果统计（搜索状态下显示） -->
+          <div v-if="searchKeyword && articles.length > 0" class="search-result-info">
+            检索到 <span class="result-count">{{ articles.length }}</span> 条相关结果
+          </div>
+
+          <!-- 当前显示的条款编号（非搜索状态下显示） -->
+          <div v-if="!searchKeyword" class="article-indicator">
             第 {{ currentArticleNumber }} 条
             <el-button v-if="showBackButton" type="primary" link @click="backToPrevious">
               <el-icon><component :is="BackIcon" /></el-icon>
@@ -195,94 +195,127 @@
               :key="article.id"
               :ref="(el) => setArticleRef(el, index)"
               class="article-item"
+              :class="{ collapsed: !article.isExpanded }"
             >
-              <!-- 法条标题 -->
-              <div class="article-header">
-                <h3 class="article-title">{{ article.lawName }} {{ article.articleNumber }}</h3>
-                <div class="article-actions">
-                  <el-button
-                    :type="article.isFavorite ? 'warning' : 'default'"
-                    text
-                    @click="toggleFavoriteArticle(article)"
-                  >
-                    <el-icon :color="article.isFavorite ? '#F7BA2A' : '#909399'">
-                      <component :is="StarFilledIcon" />
-                    </el-icon>
-                    收藏
-                  </el-button>
-                  <el-button type="default" text @click="copyArticle(article)">
-                    <el-icon><component :is="CopyIcon" /></el-icon>
-                    复制
-                  </el-button>
-                </div>
-              </div>
-
-              <!-- 原文 -->
-              <div class="article-section">
-                <h4 class="section-title">【原文】</h4>
-                <div class="section-content">{{ article.content }}</div>
-              </div>
-
-              <!-- 释义（仅当有内容时显示） -->
-              <div
-                v-if="article.interpretation && article.interpretation.trim()"
-                class="article-section"
-              >
-                <h4 class="section-title">【释义】</h4>
-                <div class="section-content">{{ article.interpretation }}</div>
-              </div>
-
-              <!-- 关联法条 -->
-              <div
-                v-if="article.relatedArticles && article.relatedArticles.length > 0"
-                class="article-section"
-              >
-                <h4 class="section-title">【关联法条】</h4>
-                <div class="related-articles">
-                  <div
-                    v-for="related in article.relatedArticles"
-                    :key="related.id"
-                    class="related-article"
-                    @click="jumpToArticle(related.id)"
-                  >
-                    {{ related.lawName }} {{ related.articleNumber }}：{{ related.title }}
+              <!-- 折叠状态：只显示标题、年份、条数 -->
+              <div v-if="!article.isExpanded" class="article-collapsed">
+                <div class="collapsed-header" @click="toggleArticleExpand(article)">
+                  <div class="collapsed-info">
+                    <h3 class="collapsed-title">
+                      《{{ article.lawName }}》
+                      <span v-if="article.issueYear" class="issue-year">
+                        发布年份：{{ article.issueYear }}
+                      </span>
+                    </h3>
+                  </div>
+                  <div class="article-number-box">
+                    {{ article.articleNumber }}
                   </div>
                 </div>
               </div>
 
-              <!-- 相关案例 -->
-              <div
-                v-if="article.relatedCases && article.relatedCases.length > 0"
-                class="article-section"
-              >
-                <h4 class="section-title">【相关案例】</h4>
-                <div class="related-cases">
-                  <a
-                    v-for="(caseItem, caseIndex) in article.relatedCases"
-                    :key="caseIndex"
-                    :href="caseItem.url"
-                    target="_blank"
-                    class="related-case"
-                  >
-                    {{ caseItem.title }}
-                  </a>
+              <!-- 展开状态：显示完整内容 -->
+              <div v-else class="article-expanded">
+                <!-- 法律名称和发布年份 -->
+                <div class="article-header">
+                  <div class="header-left" @click="toggleArticleExpand(article)">
+                    <h3 class="article-title">
+                      《{{ article.lawName }}》
+                      <span v-if="article.issueYear" class="issue-year">
+                        发布年份：{{ article.issueYear }}
+                      </span>
+                    </h3>
+                  </div>
+                  <div class="article-actions">
+                    <el-button
+                      :type="article.isFavorite ? 'warning' : 'default'"
+                      text
+                      @click.stop="toggleFavoriteArticle(article)"
+                    >
+                      <el-icon :color="article.isFavorite ? '#F7BA2A' : '#909399'">
+                        <component :is="StarFilledIcon" />
+                      </el-icon>
+                      收藏
+                    </el-button>
+                    <el-button type="default" text @click.stop="copyArticle(article)">
+                      <el-icon><component :is="CopyIcon" /></el-icon>
+                      复制
+                    </el-button>
+                  </div>
                 </div>
-              </div>
 
-              <!-- 相关问题 -->
-              <div
-                v-if="article.relatedQuestions && article.relatedQuestions.length > 0"
-                class="article-section"
-              >
-                <h4 class="section-title">【相关问题】</h4>
-                <div class="related-questions">
-                  <div
-                    v-for="(question, qIndex) in article.relatedQuestions"
-                    :key="qIndex"
-                    class="related-question"
-                    @click="askAI(question)"
-                  >
-                    {{ question }}
+                <!-- 第几条 -->
+                <div class="article-number">
+                  {{ article.articleNumber }}
+                </div>
+
+                <!-- 原文 -->
+                <div class="article-section">
+                  <h4 class="section-title">【原文】</h4>
+                  <div class="section-content">{{ article.content }}</div>
+                </div>
+
+                <!-- 释义（仅当有内容时显示） -->
+                <div
+                  v-if="article.interpretation && article.interpretation.trim()"
+                  class="article-section"
+                >
+                  <h4 class="section-title">【释义】</h4>
+                  <div class="section-content">{{ article.interpretation }}</div>
+                </div>
+
+                <!-- 关联法条 -->
+                <div
+                  v-if="article.relatedArticles && article.relatedArticles.length > 0"
+                  class="article-section"
+                >
+                  <h4 class="section-title">【关联法条】</h4>
+                  <div class="related-articles">
+                    <div
+                      v-for="related in article.relatedArticles"
+                      :key="related.id"
+                      class="related-article"
+                      @click="searchRelatedArticle(related)"
+                    >
+                      • {{ related.lawName }}{{ related.articleNumber }}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 相关案例 -->
+                <div
+                  v-if="article.relatedCases && article.relatedCases.length > 0"
+                  class="article-section"
+                >
+                  <h4 class="section-title">【相关案例】</h4>
+                  <div class="related-cases">
+                    <a
+                      v-for="(caseItem, caseIndex) in article.relatedCases"
+                      :key="caseIndex"
+                      :href="caseItem.url"
+                      target="_blank"
+                      class="related-case"
+                    >
+                      {{ caseItem.title }}
+                    </a>
+                  </div>
+                </div>
+
+                <!-- 相关问题 -->
+                <div
+                  v-if="article.relatedQuestions && article.relatedQuestions.length > 0"
+                  class="article-section"
+                >
+                  <h4 class="section-title">【相关问题】</h4>
+                  <div class="related-questions">
+                    <div
+                      v-for="(question, qIndex) in article.relatedQuestions"
+                      :key="qIndex"
+                      class="related-question"
+                      @click="askAI(question)"
+                    >
+                      {{ question }}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -415,6 +448,8 @@ interface LawArticle {
   relatedQuestions: string[]
   category: string
   isFavorite?: boolean
+  issueYear?: string // 发布年份
+  isExpanded?: boolean // 是否展开
 }
 
 interface RelatedArticle {
@@ -473,48 +508,8 @@ const showSearchHistory = ref<boolean>(false)
 const searchHistoryList = ref<string[]>([])
 const searchResultCount = ref<number>(0)
 
-// 法律法规的多级分类数据
-const lawPrimaryCategories = ref<PrimaryCategory[]>([
-  {
-    id: 'national-law',
-    name: '国家法律',
-    expanded: false,
-    laws: [
-      {
-        id: 'labor-law',
-        name: '中华人民共和国劳动法',
-        lawKey: '《中华人民共和国劳动法》',
-      },
-      {
-        id: 'labor-contract-law',
-        name: '中华人民共和国劳动合同法',
-        lawKey: '《中华人民共和国劳动合同法》',
-      },
-      {
-        id: 'social-insurance-law',
-        name: '中华人民共和国社会保险法',
-        lawKey: '《中华人民共和国社会保险法》',
-      },
-    ],
-  },
-  {
-    id: 'administrative-regulation',
-    name: '行政法规',
-    expanded: false,
-    laws: [
-      {
-        id: 'paid-leave-regulation',
-        name: '职工带薪年休假条例',
-        lawKey: '《职工带薪年休假条例》',
-      },
-      {
-        id: 'work-injury-insurance',
-        name: '工伤保险条例',
-        lawKey: '《工伤保险条例》',
-      },
-    ],
-  },
-])
+// 法律法规的多级分类数据（从API动态加载）
+const lawPrimaryCategories = ref<PrimaryCategory[]>([])
 
 // 已选择显示的法律ID列表
 const selectedLawIds = ref<string[]>([])
@@ -527,29 +522,10 @@ interface ScenarioItem {
 }
 
 // 常见场景（从API动态获取）
-const scenarioSubCategories = ref<ScenarioItem[]>([
-  // 默认数据，作为降级方案
-  { id: 'scenario-1', label: '工资薪酬', relatedArticleIds: [] },
-  { id: 'scenario-2', label: '工作时间', relatedArticleIds: [] },
-  { id: 'scenario-3', label: '劳动合同', relatedArticleIds: [] },
-  { id: 'scenario-4', label: '解除终止', relatedArticleIds: [] },
-  { id: 'scenario-5', label: '社会保险', relatedArticleIds: [] },
-  { id: 'scenario-6', label: '特殊情形', relatedArticleIds: [] },
-  { id: 'scenario-7', label: '劳动争议处理', relatedArticleIds: [] },
-])
+const scenarioSubCategories = ref<ScenarioItem[]>([])
 
 // 热点专题（从API动态获取）
-const topicSubCategories = ref<ScenarioItem[]>([
-  // 默认数据，作为降级方案
-  { id: 'topic-1', label: '996工作制争议', relatedArticleIds: ['1', '3', '4'] },
-  { id: 'topic-2', label: '加班费计算与支付', relatedArticleIds: ['1', '2'] },
-  { id: 'topic-3', label: '经济补偿金标准', relatedArticleIds: ['1', '2', '3'] },
-  { id: 'topic-4', label: '竞业限制与补偿', relatedArticleIds: ['1', '4'] },
-  { id: 'topic-5', label: '试用期权益保护', relatedArticleIds: ['1', '2', '4'] },
-  { id: 'topic-6', label: '社保缴纳基数问题', relatedArticleIds: ['2', '4'] },
-  { id: 'topic-7', label: '劳动合同解除赔偿', relatedArticleIds: ['1', '2', '3', '4'] },
-  { id: 'topic-8', label: '年休假权益保障', relatedArticleIds: ['1', '3'] },
-])
+const topicSubCategories = ref<ScenarioItem[]>([])
 
 // 设置法条引用
 function setArticleRef(el: any, index: number) {
@@ -567,7 +543,7 @@ function convertNewApiDataToArticles(responseData: KnowledgeQueryResponseData): 
     return []
   }
 
-  return responseData.map((item: KnowledgeRegulationItem, index: number) => {
+  const articles = responseData.map((item: KnowledgeRegulationItem, index: number) => {
     // 将API返回的相关案例转换为前端格式
     const relatedCases =
       item.relevantCases?.map((caseItem) => ({
@@ -578,18 +554,38 @@ function convertNewApiDataToArticles(responseData: KnowledgeQueryResponseData): 
     // 相关问题
     const relatedQuestions = item.relevantQuestions || []
 
+    // 解析关联法条字符串数组（如"劳动合同法第四条"）
+    const relatedArticles =
+      item.relatedRegulationList?.map((relatedStr, relIndex) => {
+        // 使用正则表达式提取法律名称和条款编号
+        // 匹配格式：法律名称 + 第X条 或 第XX条 等
+        const match = relatedStr.match(/^(.+?)第([零一二三四五六七八九十百千0-9]+)条$/)
+
+        if (match) {
+          const lawName = match[1].trim() // 法律名称
+          const articleNum = match[2] // 条款编号（可能是中文数字或阿拉伯数字）
+
+          return {
+            id: `related-${index}-${relIndex}`,
+            lawName: lawName,
+            articleNumber: `第${articleNum}条`,
+            title: '', // 后端没有返回标题
+          }
+        } else {
+          // 如果解析失败，返回原字符串
+          return {
+            id: `related-${index}-${relIndex}`,
+            lawName: relatedStr,
+            articleNumber: '',
+            title: '',
+          }
+        }
+      }) || []
+
     // 移除法律名称后的日期后缀，如"_20241206"
     const cleanLawName = item.lawName.replace(/_\d{8}$/, '')
 
-    // 检查并记录regulationId状态
-    if (!item.regulationId) {
-      console.warn(`⚠️ 法条缺少regulationId: ${cleanLawName} 第${item.articleNumber}条`)
-    } else {
-      console.log(
-        `✅ 法条包含regulationId(${item.regulationId}): ${cleanLawName} 第${item.articleNumber}条`,
-      )
-    }
-
+    // 默认都折叠，稍后会处理最后一个展开
     return {
       id: `article-${item.articleNumber}-${index}`,
       regulationId: item.regulationId, // 使用API返回的regulationId（如果有）
@@ -598,13 +594,22 @@ function convertNewApiDataToArticles(responseData: KnowledgeQueryResponseData): 
       title: `${cleanLawName} 第${item.articleNumber}条`,
       content: item.regulationContent,
       interpretation: item.aiTranslateContent,
-      relatedArticles: [], // 新API暂不返回关联法条
+      relatedArticles: relatedArticles, // 关联法条
       relatedCases: relatedCases,
       relatedQuestions: relatedQuestions,
       category: 'api', // 标记为来自API的数据
       isFavorite: false,
+      issueYear: item.issueYear || '', // 发布年份
+      isExpanded: false, // 默认折叠
     }
   })
+
+  // 将最后一个法条设为展开状态
+  if (articles.length > 0) {
+    articles[articles.length - 1].isExpanded = true
+  }
+
+  return articles
 }
 
 // 检查并更新文章的收藏状态
@@ -616,7 +621,7 @@ async function updateArticlesFavoriteStatus(articleList: LawArticle[]) {
         const isFavorited = await checkFavorite(article.regulationId)
         article.isFavorite = isFavorited
       } catch (error) {
-        console.error('检查收藏状态失败:', error)
+        // 检查收藏状态失败
       }
     }
   }
@@ -628,27 +633,21 @@ function loadFavoritesFromStorage() {
   try {
     // 收藏状态现在通过API管理
   } catch (error) {
-    console.error('加载收藏状态失败:', error)
+    // 加载收藏状态失败
   }
 }
 
 // 从API加载搜索历史
 async function loadSearchHistory() {
   try {
-    console.log('🔍 加载用户搜索历史...')
     const history = await getUserHistory()
-
-    console.log('✅ 用户搜索历史加载成功:', history)
 
     if (history && Array.isArray(history) && history.length > 0) {
       searchHistoryList.value = history
-      console.log('📝 搜索历史已更新:', searchHistoryList.value)
     } else {
-      console.log('ℹ️ 暂无搜索历史')
       searchHistoryList.value = []
     }
   } catch (error) {
-    console.error('❌ 加载搜索历史失败:', error)
     searchHistoryList.value = []
   }
 }
@@ -706,7 +705,6 @@ async function confirmDeleteHistory(keyword: string) {
 
       ElMessage.success('删除成功')
     } catch (error: any) {
-      console.error('删除历史记录失败:', error)
       ElMessage.error(error.message || '删除失败，请稍后重试')
     }
   } catch {
@@ -751,8 +749,6 @@ async function loadRecommendations() {
   }
 
   try {
-    console.log('🔍 知识库加载推荐，问题:', queryQuestion)
-
     // 调用API查询相关法条
     const requestData: KnowledgeQueryRequest = {
       question: queryQuestion,
@@ -760,16 +756,10 @@ async function loadRecommendations() {
 
     const response = await queryKnowledge(requestData)
 
-    console.log('✅ API响应:', response)
-    console.log('📊 响应数据类型:', typeof response, '是否为数组:', Array.isArray(response))
-
     // 注意：响应拦截器已经提取了 data 字段，response 直接就是数组
     if (response && Array.isArray(response) && response.length > 0) {
       // 转换API数据为法条数组
       const apiArticles = convertNewApiDataToArticles(response)
-
-      console.log('📝 转换后的法条数量:', apiArticles.length)
-      console.log('📝 转换后的法条数据:', apiArticles)
 
       if (apiArticles.length > 0) {
         articles.value = apiArticles
@@ -780,15 +770,12 @@ async function loadRecommendations() {
         // 根据推荐的法条自动展开导航
         autoExpandNavigationByArticles(apiArticles)
       } else {
-        console.warn('⚠️ 转换后的法条数据为空')
         articles.value = []
       }
     } else {
-      console.warn('⚠️ API响应失败或数据格式不正确:', response)
       articles.value = []
     }
   } catch (error) {
-    console.error('❌ 加载推荐失败:', error)
     articles.value = []
   }
 
@@ -805,13 +792,9 @@ async function loadRecommendations() {
 // 加载国家法规数据
 async function loadNationalLaws() {
   try {
-    console.log('🔍 加载国家法规数据...')
     const response = await getNationalLaws(1, 100) // 加载前100条
 
     if (response && response.content && response.content.length > 0) {
-      console.log('✅ 国家法规数据加载成功:', response.content)
-      console.log('📊 数据数量:', response.content.length)
-
       // 将API数据转换为导航栏格式
       // 每个法律作为一个导航项，点击后显示该法律下的所有条款
       const nationalLaws = response.content
@@ -825,15 +808,11 @@ async function loadNationalLaws() {
           regulations: lawCategory.regulations, // 保存法规数据供后续使用
         }))
 
-      console.log('📝 国家法律数量:', nationalLaws.length)
-
       return nationalLaws
     } else {
-      console.warn('⚠️ 国家法规数据为空')
       return []
     }
   } catch (error) {
-    console.error('❌ 加载国家法规失败:', error)
     return []
   }
 }
@@ -841,13 +820,9 @@ async function loadNationalLaws() {
 // 加载地方法规数据
 async function loadLocalLaws() {
   try {
-    console.log('🔍 加载地方法规数据...')
     const response = await getLocalLaws(1, 100) // 加载前100条
 
     if (response && response.content && response.content.length > 0) {
-      console.log('✅ 地方法规数据加载成功:', response.content)
-      console.log('📊 数据数量:', response.content.length)
-
       // 将API数据转换为导航栏格式
       const localLaws = response.content
         .filter((lawCategory) => lawCategory.categoryType === 0)
@@ -860,15 +835,11 @@ async function loadLocalLaws() {
           regulations: lawCategory.regulations,
         }))
 
-      console.log('📝 地方法规数量:', localLaws.length)
-
       return localLaws
     } else {
-      console.warn('⚠️ 地方法规数据为空')
       return []
     }
   } catch (error) {
-    console.error('❌ 加载地方法规失败:', error)
     return []
   }
 }
@@ -899,23 +870,14 @@ async function loadAllLaws() {
     })
   }
 
-  // 如果没有数据，使用默认数据
-  if (categorizedLaws.length === 0) {
-    console.warn('⚠️ 所有法规数据为空，使用默认数据')
-    // 保持原有的硬编码数据
-  } else {
-    lawPrimaryCategories.value = categorizedLaws
-    console.log('✅ 法规导航栏已更新:', lawPrimaryCategories.value)
-  }
+  // 更新法规导航数据
+  lawPrimaryCategories.value = categorizedLaws
 }
 
 // 加载常见场景列表
 async function loadCommonCases() {
   try {
-    console.log('🔍 加载常见场景列表...')
     const cases = await getCommonCases()
-
-    console.log('✅ 常见场景列表加载成功:', cases)
 
     if (cases && Array.isArray(cases) && cases.length > 0) {
       // 将字符串数组转换为 ScenarioItem 格式
@@ -924,24 +886,16 @@ async function loadCommonCases() {
         label: caseItem,
         relatedArticleIds: [], // API返回的是场景名称，不包含关联法条ID，所以留空
       }))
-
-      console.log('📝 常见场景列表已更新:', scenarioSubCategories.value)
-    } else {
-      console.warn('⚠️ 常见场景列表为空，使用默认数据')
     }
   } catch (error) {
-    console.error('❌ 加载常见场景列表失败:', error)
-    // 保持默认数据
+    // 加载失败，常见场景列表将为空
   }
 }
 
 // 加载热点专栏主题
 async function loadHotTopics() {
   try {
-    console.log('🔍 加载热点专栏主题...')
     const topics = await getHotTopics()
-
-    console.log('✅ 热点专栏主题加载成功:', topics)
 
     if (topics && Array.isArray(topics) && topics.length > 0) {
       // 将字符串数组转换为 ScenarioItem 格式
@@ -950,14 +904,9 @@ async function loadHotTopics() {
         label: topic,
         relatedArticleIds: [], // API返回的是专题名称，不包含关联法条ID，所以留空
       }))
-
-      console.log('📝 热点专栏主题已更新:', topicSubCategories.value)
-    } else {
-      console.warn('⚠️ 热点专栏主题为空，使用默认数据')
     }
   } catch (error) {
-    console.error('❌ 加载热点专栏主题失败:', error)
-    // 保持默认数据
+    // 加载失败，热点专题列表将为空
   }
 }
 
@@ -985,7 +934,7 @@ onMounted(async () => {
   try {
     await loadRecommendations()
   } catch (error) {
-    console.error('初始化失败:', error)
+    // 初始化失败
   } finally {
     loading.value = false
   }
@@ -1050,8 +999,6 @@ async function loadArticlesBySelectedLaws() {
       })
     })
 
-    console.log('📝 选中的法律数据:', selectedLawsData)
-
     // 将regulations转换为LawArticle格式
     const convertedArticles: LawArticle[] = []
     selectedLawsData.forEach((lawData) => {
@@ -1069,11 +1016,16 @@ async function loadArticlesBySelectedLaws() {
           relatedQuestions: [],
           category: 'national-law',
           isFavorite: false,
+          issueYear: regulation.issueYear || '', // 发布年份
+          isExpanded: false, // 默认折叠
         })
       })
     })
 
-    console.log('📝 转换后的法条数量:', convertedArticles.length)
+    // 将最后一个法条设为展开状态
+    if (convertedArticles.length > 0) {
+      convertedArticles[convertedArticles.length - 1].isExpanded = true
+    }
 
     articles.value = convertedArticles
     recommendationText.value = ''
@@ -1090,7 +1042,6 @@ async function loadArticlesBySelectedLaws() {
     await nextTick()
     scrollbarRef.value?.setScrollTop(0)
   } catch (error) {
-    console.error('❌ 加载法条失败:', error)
     ElMessage.error('加载法条失败')
   } finally {
     loading.value = false
@@ -1157,15 +1108,11 @@ async function searchByScenarioName(scenarioName: string) {
   recommendationText.value = `常见场景：${scenarioName}`
 
   try {
-    console.log('🔍 搜索常见场景:', scenarioName)
-
     const requestData: KnowledgeQueryRequest = {
       question: scenarioName,
     }
 
     const response = await queryKnowledge(requestData)
-
-    console.log('✅ 常见场景搜索结果:', response)
 
     if (response && Array.isArray(response) && response.length > 0) {
       const apiArticles = convertNewApiDataToArticles(response)
@@ -1191,7 +1138,6 @@ async function searchByScenarioName(scenarioName: string) {
       articles.value = []
     }
   } catch (error: any) {
-    console.error('❌ 常见场景搜索失败:', error)
     ElMessage.error(error.message || '搜索失败')
     articles.value = []
   } finally {
@@ -1216,15 +1162,11 @@ async function searchByTopicName(topicName: string) {
   recommendationText.value = `热点专题：${topicName}`
 
   try {
-    console.log('🔍 搜索热点专题:', topicName)
-
     const requestData: KnowledgeQueryRequest = {
       question: topicName,
     }
 
     const response = await queryKnowledge(requestData)
-
-    console.log('✅ 热点专题搜索结果:', response)
 
     if (response && Array.isArray(response) && response.length > 0) {
       const apiArticles = convertNewApiDataToArticles(response)
@@ -1250,61 +1192,12 @@ async function searchByTopicName(topicName: string) {
       articles.value = []
     }
   } catch (error: any) {
-    console.error('❌ 热点专题搜索失败:', error)
     ElMessage.error(error.message || '搜索失败')
     articles.value = []
   } finally {
     loading.value = false
   }
 }
-
-// 检查是否为精确定位搜索（如"劳动法44条"）- 备用函数，API降级时使用
-// function isPreciseSearch(keyword: string): { lawName: string; articleNum: string } | null {
-//   // 匹配"劳动法44条"、"劳动合同法第47条"等格式
-//   const patterns = [
-//     /(.+?法).*?(\d+)条?/,
-//     /(.+?条例).*?(\d+)条?/,
-//   ]
-
-//   for (const pattern of patterns) {
-//     const match = keyword.match(pattern)
-//     if (match) {
-//       return {
-//         lawName: match[1],
-//         articleNum: match[2],
-//       }
-//     }
-//   }
-
-//   return null
-// }
-
-// 模糊匹配相关词（用于扩展搜索）- 备用函数，API降级时使用
-// function getRelatedKeywords(keyword: string): string[] {
-//   const relatedMap: Record<string, string[]> = {
-//     '加班费': ['加班工资', '加班报酬', '加班补偿', '超时工作'],
-//     '工资': ['薪资', '薪酬', '报酬', '劳动报酬'],
-//     '解除': ['终止', '辞退', '开除', '离职'],
-//     '补偿': ['赔偿', '补偿金', '赔偿金', '经济补偿'],
-//     '合同': ['协议', '契约'],
-//     '社保': ['社会保险', '五险', '医保', '养老保险'],
-//   }
-
-//   const keywords = [keyword]
-
-//   // 查找相关词
-//   for (const [key, related] of Object.entries(relatedMap)) {
-//     if (keyword.includes(key)) {
-//       keywords.push(...related)
-//     }
-//     // 反向匹配
-//     if (related.some(word => keyword.includes(word))) {
-//       keywords.push(key, ...related)
-//     }
-//   }
-
-//   return [...new Set(keywords)]
-// }
 
 // 搜索
 async function handleSearch() {
@@ -1326,8 +1219,6 @@ async function handleSearch() {
   showBackButton.value = false
 
   try {
-    console.log('🔍 搜索关键词:', keyword)
-
     // 调用真实API
     const requestData: KnowledgeQueryRequest = {
       question: keyword,
@@ -1335,15 +1226,10 @@ async function handleSearch() {
 
     const response = await queryKnowledge(requestData)
 
-    console.log('✅ 搜索API响应:', response)
-    console.log('📊 响应数据类型:', typeof response, '是否为数组:', Array.isArray(response))
-
     // 注意：响应拦截器已经提取了 data 字段，response 直接就是数组
     if (response && Array.isArray(response) && response.length > 0) {
       // 转换API数据为法条数组
       const apiArticles = convertNewApiDataToArticles(response)
-
-      console.log('📝 搜索结果法条数量:', apiArticles.length)
 
       articles.value = apiArticles
       searchResultCount.value = apiArticles.length
@@ -1368,12 +1254,10 @@ async function handleSearch() {
         ElMessage.info('未找到相关法条')
       }
     } else {
-      console.warn('⚠️ 搜索API响应失败或无数据:', response)
       ElMessage.info('未找到相关法条')
       articles.value = []
     }
   } catch (error: any) {
-    console.error('❌ 搜索失败:', error)
     ElMessage.error(error.message || '搜索服务暂时不可用，请稍后重试')
     articles.value = []
   } finally {
@@ -1427,12 +1311,6 @@ function handleScroll() {
 async function toggleFavoriteArticle(article: LawArticle) {
   // 检查是否有 regulationId
   if (!article.regulationId) {
-    console.warn('⚠️ 法条缺少regulationId:', {
-      lawName: article.lawName,
-      articleNumber: article.articleNumber,
-      title: article.title,
-      category: article.category,
-    })
     ElMessage.warning('该法条暂不支持收藏功能，请联系管理员（缺少法条ID）')
     return
   }
@@ -1440,12 +1318,6 @@ async function toggleFavoriteArticle(article: LawArticle) {
   const newStatus = !article.isFavorite
 
   try {
-    console.log(`${newStatus ? '📌 收藏' : '🗑️ 取消收藏'}法条:`, {
-      regulationId: article.regulationId,
-      lawName: article.lawName,
-      articleNumber: article.articleNumber,
-    })
-
     // 调用API
     if (newStatus) {
       await addFavorite(article.regulationId)
@@ -1466,7 +1338,6 @@ async function toggleFavoriteArticle(article: LawArticle) {
       loadFavorites()
     }
   } catch (error) {
-    console.error('收藏操作失败:', error)
     ElMessage.error(newStatus ? '收藏失败' : '取消收藏失败')
   }
 }
@@ -1486,9 +1357,16 @@ function copyArticle(article: LawArticle) {
 }
 
 // 跳转到关联法条 - 功能已废弃
-async function jumpToArticle(_articleId: string) {
-  // 跳转到关联法条功能已废弃
-  ElMessage.warning('该功能暂时不可用，请使用搜索功能')
+// 搜索关联法条
+async function searchRelatedArticle(related: RelatedArticle) {
+  // 构造搜索关键词：法律名称 + 条款编号
+  const keyword = `${related.lawName} ${related.articleNumber}`.trim()
+
+  // 设置搜索关键词
+  searchKeyword.value = keyword
+
+  // 执行搜索
+  await handleSearch()
 }
 
 // 返回之前的位置 - 功能已废弃
@@ -1499,6 +1377,15 @@ async function backToPrevious() {
   showBackButton.value = false
   previousPosition.value = null
   ElMessage.warning('返回功能暂时不可用')
+}
+
+// 切换法条展开/折叠状态
+function toggleArticleExpand(article: LawArticle) {
+  // 通过索引查找并切换展开状态，确保响应式更新
+  const index = articles.value.findIndex((a) => a.id === article.id)
+  if (index !== -1) {
+    articles.value[index].isExpanded = !articles.value[index].isExpanded
+  }
 }
 
 // 跳转到AI咨询
@@ -1521,9 +1408,8 @@ async function loadFavoriteCount() {
   try {
     const count = await getFavoriteCount()
     favoriteCount.value = count
-    console.log('✅ 收藏数量:', count)
   } catch (error) {
-    console.error('❌ 加载收藏数量失败:', error)
+    // 加载收藏数量失败
   }
 }
 
@@ -1553,11 +1439,10 @@ async function loadFavorites() {
       relatedQuestions: [],
       category: 'favorite',
       isFavorite: true,
+      issueYear: fav.issueYear || '', // 发布年份
+      isExpanded: true, // 收藏列表默认展开
     }))
-
-    console.log('✅ 收藏列表加载成功，共', favoriteArticles.value.length, '条')
   } catch (error) {
-    console.error('❌ 加载收藏列表失败:', error)
     ElMessage.error('加载收藏列表失败')
   } finally {
     loading.value = false
@@ -1586,6 +1471,8 @@ async function loadArticleFromFavorite(article: LawArticle) {
     relatedQuestions: [], // 不显示相关问题
     category: article.category,
     isFavorite: article.isFavorite,
+    issueYear: article.issueYear || '',
+    isExpanded: true, // 从收藏加载的法条默认展开
   }
 
   articles.value = [simplifiedArticle]
@@ -2005,24 +1892,6 @@ async function loadArticleFromFavorite(article: LawArticle) {
         flex-shrink: 0;
       }
 
-      .search-result-info {
-        margin: 0 20px 16px 20px;
-        padding: 12px 16px;
-        background: #ecf5ff;
-        border-left: 4px solid #409eff;
-        border-radius: 4px;
-        font-size: 14px;
-        color: #606266;
-        flex-shrink: 0;
-
-        .result-count {
-          font-weight: 600;
-          color: #409eff;
-          font-size: 16px;
-          margin: 0 4px;
-        }
-      }
-
       .articles-wrapper {
         flex: 1;
         margin: 0 20px 20px 20px;
@@ -2032,6 +1901,24 @@ async function loadArticleFromFavorite(article: LawArticle) {
         display: flex;
         flex-direction: column;
         overflow: hidden;
+
+        .search-result-info {
+          margin: 20px 24px 16px 24px;
+          padding: 12px 16px;
+          background: #ecf5ff;
+          border-left: 4px solid #409eff;
+          border-radius: 4px;
+          font-size: 14px;
+          color: #606266;
+          flex-shrink: 0;
+
+          .result-count {
+            font-weight: 600;
+            color: #409eff;
+            font-size: 16px;
+            margin: 0 4px;
+          }
+        }
 
         .article-indicator {
           padding: 16px 24px;
@@ -2048,34 +1935,125 @@ async function loadArticleFromFavorite(article: LawArticle) {
           flex: 1;
 
           .article-item {
-            padding: 24px;
             border-bottom: 1px solid #ebeef5;
+            transition: all 0.3s ease;
 
             &:last-child {
               border-bottom: none;
             }
 
+            // 折叠状态样式
+            &.collapsed {
+              padding: 0;
+
+              .article-collapsed {
+                .collapsed-header {
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  padding: 16px 20px;
+                  cursor: pointer;
+                  transition: all 0.3s ease;
+                  background: #fff;
+
+                  &:hover {
+                    background: #f5f7fa;
+                  }
+
+                  .collapsed-info {
+                    flex: 1;
+
+                    .collapsed-title {
+                      font-size: 15px;
+                      font-weight: 600;
+                      color: #303133;
+                      margin: 0;
+                      display: flex;
+                      align-items: center;
+                      gap: 10px;
+
+                      .issue-year {
+                        font-size: 12px;
+                        font-weight: normal;
+                        color: #909399;
+                      }
+                    }
+                  }
+
+                  .article-number-box {
+                    padding: 8px 15px;
+                    font-size: 14px;
+                    color: #606266;
+                    font-weight: 500;
+                    background: transparent;
+                    border-radius: 4px;
+                    flex-shrink: 0;
+                    line-height: 1;
+                  }
+                }
+              }
+            }
+
+            // 展开状态样式
+            .article-expanded {
+              padding: 20px;
+            }
+
             .article-header {
               display: flex;
               justify-content: space-between;
-              align-items: center;
-              margin-bottom: 20px;
+              align-items: flex-start;
+              margin-bottom: 12px;
+              padding-bottom: 12px;
+              border-bottom: 1px solid #e4e7ed;
 
-              .article-title {
-                font-size: 18px;
-                font-weight: 600;
-                color: #303133;
-                margin: 0;
+              .header-left {
+                flex: 1;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                padding: 8px;
+                margin: -8px;
+                border-radius: 4px;
+
+                &:hover {
+                  background: #f5f7fa;
+                }
+
+                .article-title {
+                  font-size: 18px;
+                  font-weight: 600;
+                  color: #303133;
+                  margin: 0;
+                  display: flex;
+                  align-items: center;
+                  gap: 12px;
+
+                  .issue-year {
+                    font-size: 13px;
+                    font-weight: normal;
+                    color: #909399;
+                  }
+                }
               }
 
               .article-actions {
                 display: flex;
                 gap: 12px;
+                flex-shrink: 0;
               }
             }
 
+            .article-number {
+              font-size: 16px;
+              font-weight: 600;
+              color: #303133;
+              margin-bottom: 16px;
+              padding-bottom: 12px;
+              border-bottom: 1px solid #e4e7ed;
+            }
+
             .article-section {
-              margin-bottom: 20px;
+              margin-bottom: 16px;
 
               &:last-child {
                 margin-bottom: 0;
@@ -2085,7 +2063,7 @@ async function loadArticleFromFavorite(article: LawArticle) {
                 font-size: 15px;
                 font-weight: 600;
                 color: #409eff;
-                margin: 0 0 12px 0;
+                margin: 0 0 10px 0;
               }
 
               .section-content {
@@ -2096,19 +2074,19 @@ async function loadArticleFromFavorite(article: LawArticle) {
               }
 
               .related-articles {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+
                 .related-article {
-                  padding: 10px 16px;
-                  background: #f5f7fa;
-                  border-left: 3px solid #409eff;
-                  margin-bottom: 8px;
+                  color: #409eff;
+                  font-size: 14px;
                   cursor: pointer;
                   transition: all 0.3s;
-                  font-size: 14px;
-                  color: #606266;
 
                   &:hover {
-                    background: #ecf5ff;
-                    color: #409eff;
+                    color: #66b1ff;
+                    text-decoration: underline;
                   }
                 }
               }

@@ -507,7 +507,6 @@ function loadReviewHistory() {
     try {
       reviewHistory.value = JSON.parse(stored)
     } catch (e) {
-      console.error('Failed to load review history:', e)
       reviewHistory.value = []
     }
   }
@@ -597,7 +596,6 @@ async function saveToHistory() {
       ElMessage.error(`保存失败：${errorMessage}`)
     }
   } catch (error) {
-    console.error('保存审查记录失败:', error)
     ElMessage.error('保存失败，请稍后重试')
 
     // 如果后端保存失败，仍然保存到本地作为备份
@@ -673,7 +671,6 @@ async function loadReviewRecordDetail(recordId: string) {
         // 显示成功消息
         ElMessage.success('审查记录加载成功')
       } catch (parseError) {
-        console.error('解析审查内容失败:', parseError)
         ElMessage.error('审查记录数据格式错误')
       }
     } else {
@@ -681,7 +678,6 @@ async function loadReviewRecordDetail(recordId: string) {
       ElMessage.error(errorMessage)
     }
   } catch (error) {
-    console.error('加载审查记录详情失败:', error)
     ElMessage.error('加载失败，请稍后重试')
   } finally {
     loadingRecordDetail.value = false
@@ -864,7 +860,6 @@ async function handleFileChange(event: Event) {
       fileUploaded.value = true
       ElMessage.success('文件解析成功，请点击开始审查')
     } catch (error) {
-      console.error('文件解析失败:', error)
       ElMessage.error('文件解析失败，请稍后重试')
       // 清理状态
       fileUploaded.value = false
@@ -908,7 +903,6 @@ async function startReview() {
 
     ElMessage.success('审查完成')
   } catch (error) {
-    console.error('审查失败:', error)
     ElMessage.error('审查失败，请稍后重试')
   } finally {
     reviewing.value = false
@@ -995,15 +989,10 @@ function parseReviewResult(reviewText: string) {
             if (typeof startIndex === 'number' && typeof endIndex === 'number') {
               const extractedText = contractTextValue.substring(startIndex, endIndex)
               if (extractedText !== originalTextContent) {
-                console.warn('后端索引不匹配！')
-                console.log('期望文本:', originalTextContent)
-                console.log('实际文本:', extractedText)
-                console.log('索引:', { startIndex, endIndex })
                 // 重新查找正确位置
                 const position = findTextPosition(contractTextValue, originalTextContent)
                 startIndex = position.startIndex
                 endIndex = position.endIndex
-                console.log('重新查找后的索引:', { startIndex, endIndex })
               }
             } else {
               // 如枟后端没有提供索引，在文本中查找
@@ -1035,15 +1024,10 @@ function parseReviewResult(reviewText: string) {
             if (typeof startIndex === 'number' && typeof endIndex === 'number') {
               const extractedText = contractTextValue.substring(startIndex, endIndex)
               if (extractedText !== originalTextContent) {
-                console.warn('后端索引不匹配！')
-                console.log('期望文本:', originalTextContent)
-                console.log('实际文本:', extractedText)
-                console.log('索引:', { startIndex, endIndex })
                 // 重新查找正确位置
                 const position = findTextPosition(contractTextValue, originalTextContent)
                 startIndex = position.startIndex
                 endIndex = position.endIndex
-                console.log('重新查找后的索引:', { startIndex, endIndex })
               }
             } else {
               // 如枟后端没有提供索引，在文本中查找
@@ -1090,7 +1074,6 @@ function parseReviewResult(reviewText: string) {
     ElMessage.error('审查结果解析失败，请重试')
     reviewing.value = false
   } catch (error) {
-    console.error('解析审查结果时出错:', error)
     ElMessage.error('审查结果解析失败，请重试')
     reviewing.value = false
   }
@@ -1206,7 +1189,6 @@ async function exportToPDF() {
 
     ElMessage.success('PDF文件下载成功')
   } catch (error: any) {
-    console.error('导出PDF失败:', error)
     ElMessage.error(error.message || '导出PDF失败，请稍后重试')
   }
 }
@@ -1242,7 +1224,6 @@ async function exportToWord() {
 
     ElMessage.success('Word文件下载成功')
   } catch (error: any) {
-    console.error('导出Word失败:', error)
     ElMessage.error(error.message || '导出Word失败，请稍后重试')
   }
 }
@@ -1363,7 +1344,6 @@ async function deleteHistory(id: string) {
           ElMessage.warning(`后端删除失败：${response?.message || '未知错误'}，仅删除本地记录`)
         }
       } catch (error) {
-        console.error('后端删除记录失败:', error)
         ElMessage.warning('后端删除失败，仅删除本地记录')
       }
     }
@@ -1400,7 +1380,7 @@ async function initializeComponent() {
   try {
     await syncRecordListFromBackend()
   } catch (error) {
-    console.error('初始化时同步后端记录失败:', error)
+    // 初始化时同步后端记录失败
   }
 }
 

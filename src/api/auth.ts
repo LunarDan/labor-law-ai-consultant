@@ -7,6 +7,7 @@ import type {
   ChangePasswordRequest,
   UpdateUsernameRequest,
   RefreshTokenResponse,
+  ApiResponse,
   UserInfo,
 } from '@/types'
 
@@ -16,9 +17,9 @@ export const login = (data: LoginForm): Promise<LoginResponse> => {
 }
 
 // 刷新 Token
-export const refreshToken = (refreshToken: string): Promise<RefreshTokenResponse> => {
-  return request.get('/user/refresh-token', {
-    params: { refreshToken },
+export const refreshToken = (refreshTokenStr: string): Promise<RefreshTokenResponse> => {
+  return request.post('/user/refresh-token', null, {
+    params: { refreshToken: refreshTokenStr },
   }) as Promise<RefreshTokenResponse>
 }
 
@@ -28,10 +29,9 @@ export const register = (data: any): Promise<any> => {
 }
 
 // 获取用户信息
-export const getUserInfo = (userId: number | string): Promise<UserInfo> => {
-  // 根据API文档，参数名为userId，类型为integer
+export const getUserInfo = (userId: number): Promise<UserInfo> => {
   return request.get('/user/info', {
-    params: { userId: parseInt(userId.toString()) },
+    params: { userId },
   }) as Promise<UserInfo>
 }
 
@@ -41,21 +41,26 @@ export const getVerifyCode = (data: VerifyCodeRequest): Promise<void> => {
 }
 
 // 重置密码（忘记密码）
-export const resetPassword = (data: ResetPasswordRequest): Promise<void> => {
-  return request.post('/user/forget', data)
+export const resetPassword = (data: ResetPasswordRequest): Promise<ApiResponse<string>> => {
+  return request.patch('/user/forget', data) as Promise<ApiResponse<string>>
 }
 
 // 修改用户名
-export const updateUsername = (data: UpdateUsernameRequest): Promise<void> => {
-  return request.post('/user/change-username', data)
+export const updateUsername = (data: UpdateUsernameRequest): Promise<ApiResponse<string>> => {
+  return request.patch('/user/change-username', data) as Promise<ApiResponse<string>>
 }
 
 // 修改密码
-export const changePassword = (data: ChangePasswordRequest): Promise<void> => {
-  return request.post('/user/change-password', data)
+export const changePassword = (data: ChangePasswordRequest): Promise<ApiResponse<string>> => {
+  return request.patch('/user/change-password', data) as Promise<ApiResponse<string>>
 }
 
 // 用户登出
-export const logout = (refreshToken: string): Promise<void> => {
-  return request.post('/user/logout', null, { params: { refreshToken } })
+export const logout = (refreshToken: string): Promise<ApiResponse> => {
+  return request.delete('/user/logout', { params: { refreshToken } }) as Promise<ApiResponse>
+}
+
+// 批量注销用户所有登录会话
+export const logoutAll = (userId: number): Promise<ApiResponse<string>> => {
+  return request.delete('/user/logout-all', { params: { userId } }) as Promise<ApiResponse<string>>
 }

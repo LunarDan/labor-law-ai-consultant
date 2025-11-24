@@ -199,7 +199,6 @@ const loadChatHistory = () => {
 
       chatHistory.value = Array.from(uniqueMap.values())
     } catch (e) {
-      console.error('Failed to load chat history:', e)
       chatHistory.value = []
     }
   }
@@ -223,7 +222,6 @@ const saveChatHistory = () => {
 
       // 如果是超过5分钟的空对话，跳过不保存
       if (ageInMinutes > 5) {
-        console.log(`🗑️ 清理空对话记录: ${item.title}`)
         return
       }
     }
@@ -469,7 +467,6 @@ async function sendMessage() {
     // AI回复完成后，自动保存对话
     saveCurrentChat()
   } catch (error) {
-    console.log(error)
     ElMessage.error('咨询失败，请稍后重试')
   } finally {
     loading.value = false
@@ -509,7 +506,6 @@ async function callAiConsult(question: string): Promise<void> {
         }
       }
     } catch (error) {
-      console.error('创建对话失败:', error)
       // 失败时使用临时ID
       if (!currentConversationId.value) {
         currentConversationId.value = generateConversationId()
@@ -519,16 +515,12 @@ async function callAiConsult(question: string): Promise<void> {
 
   // 如果还是没有conversationId，生成临时ID
   if (!currentConversationId.value) {
-    console.warn('⚠️ 没有conversationId，使用临时ID')
     currentConversationId.value = generateConversationId()
   }
 
   // 构建请求参数
   const requestData: ChatConsultRequest = {
-    id:
-      typeof authStore.userInfo.id === 'string'
-        ? parseInt(authStore.userInfo.id)
-        : authStore.userInfo.id,
+    id: authStore.userInfo.id as number, // id 现在是 number 类型
     userType: authStore.userType === '1' ? 1 : 2,
     conversationId: currentConversationId.value,
     message: question,
@@ -553,7 +545,6 @@ async function callAiConsult(question: string): Promise<void> {
 
     // 检查是否有内容
     if (!aiReply || aiReply.trim() === '') {
-      console.warn('AI响应中没有回复内容:', response)
       throw new Error('No reply in response')
     }
 
@@ -566,8 +557,6 @@ async function callAiConsult(question: string): Promise<void> {
       originalQuestion: question, // 保存用户原始问题
     })
   } catch (error: any) {
-    console.error('AI咨询接口调用失败:', error)
-
     // 根据错误类型显示不同的错误信息
     let errorMessage = '抱歉，咨询服务暂时不可用，请稍后重试。'
 
@@ -681,7 +670,6 @@ const handleNewChatEvent = async (event: Event) => {
     // 如果事件中已经包含conversationId（如从历史记录加载），则使用它
     currentConversationId.value = customEvent.detail?.conversationId || ''
   } catch (error) {
-    console.error('创建新对话失败:', error)
     currentConversationId.value = ''
   }
 }
@@ -819,7 +807,6 @@ const loadHistoryFromApi = async (conversationId: string): Promise<Message[]> =>
 
     return deduplicatedMessages
   } catch (error) {
-    console.error('从API加载历史对话失败:', error)
     throw error
   }
 }
@@ -845,7 +832,6 @@ const handleLoadChatEvent = async (event: any) => {
       }
     } catch (error) {
       // API加载失败，使用localStorage的数据（需要格式化）
-      console.error('API加载失败，使用本地缓存数据:', error)
       messages.value = formatMessages([...(historyMessages || [])])
       if (conversationId) {
         currentConversationId.value = conversationId

@@ -3,7 +3,7 @@ export type UserType = '1' | '2'
 
 // 用户信息
 export interface UserInfo {
-  id?: number | string // ID编号 (数据库主键)
+  id?: number // ID编号 (数据库主键，integer)
   userId?: string | null // 6位数用户ID
   username: string // 用户名
   phone?: string // 手机号
@@ -51,7 +51,7 @@ export interface ResetPasswordRequest {
 
 // 修改密码请求
 export interface ChangePasswordRequest {
-  userId: string
+  userId: number // 根据接口文档，userId 是 integer 类型
   oldPassword: string
   newPassword: string
 }
@@ -73,15 +73,29 @@ export interface LoginResponse {
   // 注意：后端返回的是扁平结构，不是嵌套的 userInfo 对象
 }
 
+// 刷新 Token 响应数据
+export interface RefreshTokenData {
+  id: number | null
+  userId: string
+  username: string
+  accessToken: string
+  refreshToken: string
+  success: boolean
+  timestamp: number
+}
+
 // 刷新 Token 响应
 export interface RefreshTokenResponse {
-  accessToken: string
-  refreshToken?: string // 可选：后端可能返回新的 refreshToken
+  code: number
+  message: string
+  data: RefreshTokenData
+  success: boolean
+  timestamp: number
 }
 
 // 修改用户名请求
 export interface UpdateUsernameRequest {
-  userId: string
+  userId: number // 修改为 number 类型，与其他 API 保持一致
   newUsername: string
 }
 

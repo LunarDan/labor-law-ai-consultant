@@ -33,7 +33,6 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       parsedUserInfo = JSON.parse(storedUserInfo)
     } catch (e) {
-      console.error('解析 userInfo 失败:', e)
       localStorage.removeItem('userInfo')
     }
   }
