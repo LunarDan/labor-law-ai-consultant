@@ -144,7 +144,7 @@ const handleLogin = async () => {
 
       // 后端返回的是扁平结构，需要手动组装 userInfo
       const userInfo = {
-        id: res.id?.toString(),
+        id: res.id,
         userId: res.userId,
         username: res.username,
         phone: form.phone, // 使用表单中的手机号
