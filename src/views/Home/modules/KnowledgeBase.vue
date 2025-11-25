@@ -179,15 +179,6 @@
             检索到 <span class="result-count">{{ articles.length }}</span> 条相关结果
           </div>
 
-          <!-- 当前显示的条款编号（非搜索状态下显示） -->
-          <div v-if="!searchKeyword" class="article-indicator">
-            第 {{ currentArticleNumber }} 条
-            <el-button v-if="showBackButton" type="primary" link @click="backToPrevious">
-              <el-icon><component :is="BackIcon" /></el-icon>
-              返回
-            </el-button>
-          </div>
-
           <el-scrollbar ref="scrollbarRef" class="articles-container" @scroll="handleScroll">
             <div
               v-for="(article, index) in articles"
@@ -208,8 +199,19 @@
                       </span>
                     </h3>
                   </div>
-                  <div class="article-number-box">
-                    {{ article.articleNumber }}
+                  <div class="article-number-box" @click.stop>
+                    第
+                    <input
+                      v-model.number="article.currentArticleNum"
+                      type="number"
+                      class="article-input"
+                      @keyup.enter="handleArticleNumberChange(article)"
+                      @blur="handleArticleNumberChange(article)"
+                    />
+                    条
+                    <span v-if="article.totalArticleCount" class="total-count">
+                      共{{ article.totalArticleCount }}条
+                    </span>
                   </div>
                 </div>
               </div>
@@ -226,6 +228,25 @@
                       </span>
                     </h3>
                   </div>
+                  <div class="article-number-box" @click.stop>
+                    第
+                    <input
+                      v-model.number="article.currentArticleNum"
+                      type="number"
+                      class="article-input"
+                      @keyup.enter="handleArticleNumberChange(article)"
+                      @blur="handleArticleNumberChange(article)"
+                    />
+                    条
+                    <span v-if="article.totalArticleCount" class="total-count">
+                      共{{ article.totalArticleCount }}条
+                    </span>
+                  </div>
+                </div>
+
+                <!-- 第几条和操作按钮 -->
+                <div class="article-number-actions">
+                  <div class="article-number">{{ article.articleNumber }}</div>
                   <div class="article-actions">
                     <el-button
                       :type="article.isFavorite ? 'warning' : 'default'"
@@ -242,11 +263,6 @@
                       复制
                     </el-button>
                   </div>
-                </div>
-
-                <!-- 第几条 -->
-                <div class="article-number">
-                  {{ article.articleNumber }}
                 </div>
 
                 <!-- 原文 -->
@@ -391,7 +407,6 @@ import {
   Document,
   Loading,
   CopyDocument,
-  ArrowLeft,
   Delete,
   Plus,
   Minus,
@@ -413,6 +428,7 @@ import {
   getCommonCases,
   getUserHistory,
   deleteUserHistory,
+  getLawRegulation,
   type KnowledgeQueryRequest,
   type KnowledgeQueryResponseData,
   type KnowledgeRegulationItem,
@@ -426,7 +442,6 @@ const StarFilledIcon = markRaw(StarFilled)
 const DocumentIcon = markRaw(Document)
 const LoadingIcon = markRaw(Loading)
 const CopyIcon = markRaw(CopyDocument)
-const BackIcon = markRaw(ArrowLeft)
 const DeleteIcon = markRaw(Delete)
 const PlusIcon = markRaw(Plus)
 const MinusIcon = markRaw(Minus)
@@ -438,6 +453,7 @@ const ArrowDownIcon = markRaw(ArrowDown)
 interface LawArticle {
   id: string
   regulationId?: number // 法律条款ID（用于收藏接口）
+  lawId?: number // 法律分类ID（用于查询接口）
   lawName: string
   articleNumber: string
   title: string
@@ -450,6 +466,8 @@ interface LawArticle {
   isFavorite?: boolean
   issueYear?: string // 发布年份
   isExpanded?: boolean // 是否展开
+  totalArticleCount?: number // 该法律的总条数
+  currentArticleNum?: number // 当前法条的数字（用于输入框）
 }
 
 interface RelatedArticle {
@@ -489,14 +507,13 @@ interface PrimaryCategory {
 
 // 数据
 const searchKeyword = ref<string>('')
-const currentCategory = ref<string>('laws')
+const currentCategory = ref<string>('') // 默认不展开任何分类
 const currentSubCategory = ref<string>('')
 const articles = ref<LawArticle[]>([])
 const loading = ref<boolean>(false)
 const recommendationText = ref<string>('')
 const currentArticleNumber = ref<string>('1')
 const showBackButton = ref<boolean>(false)
-const previousPosition = ref<{ articleId: string; scrollTop: number } | null>(null)
 const scrollbarRef = ref()
 const articleRefs = ref<HTMLElement[]>([])
 const favoritesDialogVisible = ref<boolean>(false)
@@ -532,6 +549,43 @@ function setArticleRef(el: any, index: number) {
   if (el) {
     articleRefs.value[index] = el
   }
+}
+
+/**
+ * 根据法律名称查找对应的法律分类ID
+ */
+function findLawIdByName(lawName: string): number | undefined {
+  if (!lawName) return undefined
+
+  // 移除法律名称后的日期后缀，如"_20241206"
+  const cleanName = lawName.replace(/_\d{8}$/, '').trim()
+
+  // 在已加载的法律列表中查找匹配的法律
+  for (const primaryCat of lawPrimaryCategories.value) {
+    for (const law of primaryCat.laws) {
+      // 完全匹配
+      if (
+        law.lawKey === cleanName ||
+        law.name === cleanName ||
+        law.lawKey === lawName ||
+        law.name === lawName
+      ) {
+        return law.lawId
+      }
+
+      // 模糊匹配（包含关系）
+      if (
+        law.lawKey.includes(cleanName) ||
+        cleanName.includes(law.lawKey) ||
+        law.name.includes(cleanName) ||
+        cleanName.includes(law.name)
+      ) {
+        return law.lawId
+      }
+    }
+  }
+
+  return undefined
 }
 
 /**
@@ -585,10 +639,20 @@ function convertNewApiDataToArticles(responseData: KnowledgeQueryResponseData): 
     // 移除法律名称后的日期后缀，如"_20241206"
     const cleanLawName = item.lawName.replace(/_\d{8}$/, '')
 
+    // 提取条数数字
+    const articleNum =
+      typeof item.articleNumber === 'number'
+        ? item.articleNumber
+        : parseInt(String(item.articleNumber))
+
+    // 根据法律名称查找对应的法律分类ID
+    const lawId = findLawIdByName(item.lawName)
+
     // 默认都折叠，稍后会处理最后一个展开
     return {
       id: `article-${item.articleNumber}-${index}`,
       regulationId: item.regulationId, // 使用API返回的regulationId（如果有）
+      lawId: lawId, // 通过法律名称查找到的法律分类ID
       lawName: cleanLawName,
       articleNumber: `第${item.articleNumber}条`,
       title: `${cleanLawName} 第${item.articleNumber}条`,
@@ -601,6 +665,8 @@ function convertNewApiDataToArticles(responseData: KnowledgeQueryResponseData): 
       isFavorite: false,
       issueYear: item.issueYear || '', // 发布年份
       isExpanded: false, // 默认折叠
+      totalArticleCount: item.totalArticles || 0, // 总条数（后端提供）
+      currentArticleNum: articleNum, // 当前条数数字
     }
   })
 
@@ -979,6 +1045,7 @@ async function loadArticlesBySelectedLaws() {
   try {
     // 获取选中的法律及其条款数据
     const selectedLawsData: Array<{
+      lawId: number
       lawName: string
       regulations: Array<{
         regulationId: number
@@ -990,8 +1057,9 @@ async function loadArticlesBySelectedLaws() {
 
     lawPrimaryCategories.value.forEach((primaryCat) => {
       primaryCat.laws.forEach((law) => {
-        if (selectedLawIds.value.includes(law.id) && law.regulations) {
+        if (selectedLawIds.value.includes(law.id) && law.regulations && law.lawId) {
           selectedLawsData.push({
+            lawId: law.lawId,
             lawName: law.lawKey,
             regulations: law.regulations,
           })
@@ -1002,10 +1070,16 @@ async function loadArticlesBySelectedLaws() {
     // 将regulations转换为LawArticle格式
     const convertedArticles: LawArticle[] = []
     selectedLawsData.forEach((lawData) => {
+      const totalCount = lawData.regulations.length // 该法律的总条数
       lawData.regulations.forEach((regulation, index) => {
+        const articleNum =
+          typeof regulation.articleNumber === 'number'
+            ? regulation.articleNumber
+            : parseInt(String(regulation.articleNumber))
         convertedArticles.push({
           id: `regulation-${regulation.regulationId}-${index}`,
           regulationId: regulation.regulationId,
+          lawId: lawData.lawId, // 添加法律分类ID
           lawName: lawData.lawName,
           articleNumber: `第${regulation.articleNumber}条`,
           title: `${lawData.lawName} 第${regulation.articleNumber}条`,
@@ -1018,6 +1092,8 @@ async function loadArticlesBySelectedLaws() {
           isFavorite: false,
           issueYear: regulation.issueYear || '', // 发布年份
           isExpanded: false, // 默认折叠
+          totalArticleCount: totalCount, // 总条数
+          currentArticleNum: articleNum, // 当前条数数字
         })
       })
     })
@@ -1369,22 +1445,146 @@ async function searchRelatedArticle(related: RelatedArticle) {
   await handleSearch()
 }
 
-// 返回之前的位置 - 功能已废弃
-async function backToPrevious() {
-  if (!previousPosition.value) return
-
-  // 返回功能已废弃
-  showBackButton.value = false
-  previousPosition.value = null
-  ElMessage.warning('返回功能暂时不可用')
-}
-
 // 切换法条展开/折叠状态
 function toggleArticleExpand(article: LawArticle) {
   // 通过索引查找并切换展开状态，确保响应式更新
   const index = articles.value.findIndex((a) => a.id === article.id)
   if (index !== -1) {
     articles.value[index].isExpanded = !articles.value[index].isExpanded
+  }
+}
+
+// 防抖：记录正在处理的法条ID
+const processingArticleId = ref<string>('')
+
+// 处理法条编号输入框变化
+async function handleArticleNumberChange(article: LawArticle) {
+  const newArticleNum = article.currentArticleNum
+
+  // 防止重复调用（如 Enter 和 blur 同时触发）
+  if (processingArticleId.value === article.id) {
+    return
+  }
+
+  // 验证输入
+  if (!newArticleNum || newArticleNum < 1) {
+    ElMessage.warning('请输入有效的法条编号')
+    // 恢复原始值
+    const match = article.articleNumber.match(/\d+/)
+    if (match) {
+      article.currentArticleNum = parseInt(match[0])
+    }
+    return
+  }
+
+  // 验证是否超出总条数
+  if (article.totalArticleCount && newArticleNum > article.totalArticleCount) {
+    ElMessage.warning(`该法律共${article.totalArticleCount}条，请输入有效范围内的编号`)
+    // 恢复原始值
+    const match = article.articleNumber.match(/\d+/)
+    if (match) {
+      article.currentArticleNum = parseInt(match[0])
+    }
+    return
+  }
+
+  // 检查是否与当前法条编号相同
+  const currentNum = parseInt(article.articleNumber.match(/\d+/)?.[0] || '0')
+  if (newArticleNum === currentNum) {
+    return // 没有变化，不需要查询
+  }
+
+  // 使用 lawId（法律分类ID），不能使用 regulationId（具体法条ID）
+  let lawIdToUse = article.lawId
+
+  // 如果没有 lawId，尝试通过法律名称查找
+  if (!lawIdToUse) {
+    lawIdToUse = findLawIdByName(article.lawName)
+  }
+
+  if (!lawIdToUse) {
+    ElMessage.warning(`该法条暂不支持跳转功能（未找到"${article.lawName}"对应的法律分类ID）`)
+    // 恢复原始值
+    const match = article.articleNumber.match(/\d+/)
+    if (match) {
+      article.currentArticleNum = parseInt(match[0])
+    }
+    return
+  }
+
+  // 设置处理标志，防止重复调用
+  processingArticleId.value = article.id
+
+  // 调用后端接口查询指定编号的法条
+  try {
+    loading.value = true
+
+    const response = await getLawRegulation(lawIdToUse, newArticleNum)
+
+    if (response && response.regulations && response.regulations.length > 0) {
+      // 查找目标条数的法条
+      const targetRegulation = response.regulations.find(
+        (reg) => reg.articleNumber === newArticleNum,
+      )
+
+      if (targetRegulation) {
+        // 找到目标法条，更新当前文章的内容
+        const index = articles.value.findIndex((a) => a.id === article.id)
+        if (index !== -1) {
+          // 更新法条内容
+          articles.value[index] = {
+            ...articles.value[index],
+            regulationId: targetRegulation.regulationId,
+            lawId: response.lawId, // 更新法律分类ID
+            articleNumber: `第${targetRegulation.articleNumber}条`,
+            title: `${response.lawName} 第${targetRegulation.articleNumber}条`,
+            content: targetRegulation.originalText,
+            issueYear: targetRegulation.issueYear || '',
+            currentArticleNum: targetRegulation.articleNumber,
+            totalArticleCount: response.regulations.length, // 更新总条数
+          }
+
+          // 检查收藏状态
+          if (targetRegulation.regulationId) {
+            try {
+              const isFavorited = await checkFavorite(targetRegulation.regulationId)
+              articles.value[index].isFavorite = isFavorited
+            } catch (error) {
+              // 检查收藏状态失败，不影响主流程
+            }
+          }
+
+          ElMessage.success(`已切换到第${newArticleNum}条`)
+        }
+      } else {
+        ElMessage.warning(`未找到第${newArticleNum}条法条`)
+        // 恢复原始值
+        const match = article.articleNumber.match(/\d+/)
+        if (match) {
+          article.currentArticleNum = parseInt(match[0])
+        }
+      }
+    } else {
+      ElMessage.warning(`未找到第${newArticleNum}条法条`)
+      // 恢复原始值
+      const match = article.articleNumber.match(/\d+/)
+      if (match) {
+        article.currentArticleNum = parseInt(match[0])
+      }
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '查询法条失败，请稍后重试')
+    // 恢复原始值
+    const match = article.articleNumber.match(/\d+/)
+    if (match) {
+      article.currentArticleNum = parseInt(match[0])
+    }
+  } finally {
+    loading.value = false
+    // 清除处理标志
+    setTimeout(() => {
+      processingArticleId.value = ''
+    }, 300) // 300ms 后清除，防止快速的 enter + blur 触发
   }
 }
 
@@ -1426,22 +1626,31 @@ async function loadFavorites() {
     const favoriteList = await getFavoriteList()
 
     // 将后端返回的收藏数据转换为LawArticle格式
-    favoriteArticles.value = favoriteList.map((fav: UserFavoriteRegulation) => ({
-      id: `fav-${fav.regulationId}`,
-      regulationId: fav.regulationId,
-      lawName: fav.regulationName,
-      articleNumber: `第${fav.articleNumber}条`,
-      title: `${fav.regulationName} 第${fav.articleNumber}条`,
-      content: fav.originalText,
-      interpretation: '', // 收藏列表不包含释义，需要时再查询
-      relatedArticles: [],
-      relatedCases: [],
-      relatedQuestions: [],
-      category: 'favorite',
-      isFavorite: true,
-      issueYear: fav.issueYear || '', // 发布年份
-      isExpanded: true, // 收藏列表默认展开
-    }))
+    favoriteArticles.value = favoriteList.map((fav: UserFavoriteRegulation) => {
+      const articleNum =
+        typeof fav.articleNumber === 'number'
+          ? fav.articleNumber
+          : parseInt(String(fav.articleNumber))
+      return {
+        id: `fav-${fav.regulationId}`,
+        regulationId: fav.regulationId,
+        lawId: fav.lawCategoryId, // 使用 lawCategoryId 作为 lawId
+        lawName: fav.regulationName,
+        articleNumber: `第${fav.articleNumber}条`,
+        title: `${fav.regulationName} 第${fav.articleNumber}条`,
+        content: fav.originalText,
+        interpretation: '', // 收藏列表不包含释义，需要时再查询
+        relatedArticles: [],
+        relatedCases: [],
+        relatedQuestions: [],
+        category: 'favorite',
+        isFavorite: true,
+        issueYear: fav.issueYear || '', // 发布年份
+        isExpanded: true, // 收藏列表默认展开
+        totalArticleCount: 0, // 收藏列表暂时不显示总条数（可以通过接口查询获取）
+        currentArticleNum: articleNum, // 当前条数数字
+      }
+    })
   } catch (error) {
     ElMessage.error('加载收藏列表失败')
   } finally {
@@ -1457,38 +1666,65 @@ async function loadArticleFromFavorite(article: LawArticle) {
   loading.value = true
   showBackButton.value = false
 
-  // 创建简化版的法条，只包含法条名称和原文
-  const simplifiedArticle: LawArticle = {
-    id: article.id,
-    regulationId: article.regulationId,
-    lawName: article.lawName,
-    articleNumber: article.articleNumber,
-    title: article.title,
-    content: article.content,
-    interpretation: '', // 不显示释义
-    relatedArticles: [], // 不显示关联法条
-    relatedCases: [], // 不显示相关案例
-    relatedQuestions: [], // 不显示相关问题
-    category: article.category,
-    isFavorite: article.isFavorite,
-    issueYear: article.issueYear || '',
-    isExpanded: true, // 从收藏加载的法条默认展开
+  try {
+    // 如果有 lawId，以及 articleNumber，查询完整信息以获取总条数
+    let totalCount = article.totalArticleCount || 0
+    let lawIdToUse = article.lawId
+
+    // 如果没有 lawId，尝试通过法律名称查找
+    if (!lawIdToUse) {
+      lawIdToUse = findLawIdByName(article.lawName)
+    }
+
+    if (lawIdToUse && article.currentArticleNum) {
+      try {
+        const response = await getLawRegulation(lawIdToUse, article.currentArticleNum)
+        if (response && response.regulations) {
+          totalCount = response.regulations.length
+        }
+      } catch (error) {
+        // 查询失败不影响主流程，使用默认值
+      }
+    }
+
+    // 创建简化版的法条，只包含法条名称和原文
+    const simplifiedArticle: LawArticle = {
+      id: article.id,
+      regulationId: article.regulationId,
+      lawId: article.lawId, // 保留 lawId，用于法条跳转
+      lawName: article.lawName,
+      articleNumber: article.articleNumber,
+      title: article.title,
+      content: article.content,
+      interpretation: '', // 不显示释义
+      relatedArticles: [], // 不显示关联法条
+      relatedCases: [], // 不显示相关案例
+      relatedQuestions: [], // 不显示相关问题
+      category: article.category,
+      isFavorite: article.isFavorite,
+      issueYear: article.issueYear || '',
+      isExpanded: true, // 从收藏加载的法条默认展开
+      totalArticleCount: totalCount, // 使用查询到的总条数
+      currentArticleNum: article.currentArticleNum,
+    }
+
+    articles.value = [simplifiedArticle]
+    recommendationText.value = ''
+
+    // 更新当前法条编号
+    const articleNum = simplifiedArticle.articleNumber.match(/\d+/)
+    if (articleNum) {
+      currentArticleNumber.value = articleNum[0]
+    }
+
+    // 滚动到顶部
+    await nextTick()
+    scrollbarRef.value?.setScrollTop(0)
+  } catch (error) {
+    ElMessage.error('加载法条失败')
+  } finally {
+    loading.value = false
   }
-
-  articles.value = [simplifiedArticle]
-  recommendationText.value = ''
-
-  // 更新当前法条编号
-  const articleNum = simplifiedArticle.articleNumber.match(/\d+/)
-  if (articleNum) {
-    currentArticleNumber.value = articleNum[0]
-  }
-
-  // 滚动到顶部
-  await nextTick()
-  scrollbarRef.value?.setScrollTop(0)
-
-  loading.value = false
 }
 </script>
 
@@ -1920,17 +2156,6 @@ async function loadArticleFromFavorite(article: LawArticle) {
           }
         }
 
-        .article-indicator {
-          padding: 16px 24px;
-          border-bottom: 1px solid #e4e7ed;
-          font-size: 16px;
-          font-weight: 500;
-          color: #303133;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
         .articles-container {
           flex: 1;
 
@@ -1989,6 +2214,51 @@ async function loadArticleFromFavorite(article: LawArticle) {
                     border-radius: 4px;
                     flex-shrink: 0;
                     line-height: 1;
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+
+                    .article-input {
+                      width: 60px;
+                      padding: 4px 8px;
+                      border: 1px solid #dcdfe6;
+                      border-radius: 4px;
+                      font-size: 14px;
+                      color: #606266;
+                      text-align: center;
+                      transition: all 0.3s;
+                      outline: none;
+
+                      &:hover {
+                        border-color: #c0c4cc;
+                      }
+
+                      &:focus {
+                        border-color: #409eff;
+                        box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.1);
+                      }
+
+                      // 隐藏数字输入框的上下箭头
+                      &::-webkit-inner-spin-button,
+                      &::-webkit-outer-spin-button {
+                        appearance: none;
+                        -webkit-appearance: none;
+                        margin: 0;
+                      }
+
+                      &[type='number'] {
+                        appearance: textfield;
+                        -moz-appearance: textfield;
+                      }
+                    }
+
+                    .total-count {
+                      margin-left: 8px;
+                      color: #909399;
+                      font-size: 13px;
+                      font-weight: normal;
+                      white-space: nowrap;
+                    }
                   }
                 }
               }
@@ -2036,20 +2306,82 @@ async function loadArticleFromFavorite(article: LawArticle) {
                 }
               }
 
+              .article-number-box {
+                padding: 8px 15px;
+                font-size: 14px;
+                color: #606266;
+                font-weight: 500;
+                background: transparent;
+                border-radius: 4px;
+                flex-shrink: 0;
+                line-height: 1;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+
+                .article-input {
+                  width: 60px;
+                  padding: 4px 8px;
+                  border: 1px solid #dcdfe6;
+                  border-radius: 4px;
+                  font-size: 14px;
+                  color: #606266;
+                  text-align: center;
+                  transition: all 0.3s;
+                  outline: none;
+
+                  &:hover {
+                    border-color: #c0c4cc;
+                  }
+
+                  &:focus {
+                    border-color: #409eff;
+                    box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.1);
+                  }
+
+                  // 隐藏数字输入框的上下箭头
+                  &::-webkit-inner-spin-button,
+                  &::-webkit-outer-spin-button {
+                    appearance: none;
+                    -webkit-appearance: none;
+                    margin: 0;
+                  }
+
+                  &[type='number'] {
+                    appearance: textfield;
+                    -moz-appearance: textfield;
+                  }
+                }
+
+                .total-count {
+                  margin-left: 8px;
+                  color: #909399;
+                  font-size: 13px;
+                  font-weight: normal;
+                  white-space: nowrap;
+                }
+              }
+            }
+
+            .article-number-actions {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 16px;
+              padding-bottom: 12px;
+              border-bottom: 1px solid #e4e7ed;
+
+              .article-number {
+                font-size: 16px;
+                font-weight: 600;
+                color: #303133;
+              }
+
               .article-actions {
                 display: flex;
                 gap: 12px;
                 flex-shrink: 0;
               }
-            }
-
-            .article-number {
-              font-size: 16px;
-              font-weight: 600;
-              color: #303133;
-              margin-bottom: 16px;
-              padding-bottom: 12px;
-              border-bottom: 1px solid #e4e7ed;
             }
 
             .article-section {

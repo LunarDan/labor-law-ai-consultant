@@ -445,3 +445,21 @@ export async function getLocalLaws(
     },
   })
 }
+
+/**
+ * 根据法律分类ID和条数号查询具体法条
+ * @param lawId 法律分类ID
+ * @param articleNumber 条数号（条数）
+ * @returns 法律分类及其所有条款信息，当前查询的条款会包含在列表中
+ */
+export async function getLawRegulation(
+  lawId: number,
+  articleNumber: number,
+): Promise<LawCategoryWithRegulationsVO> {
+  return request.get('/law/law-regulation', {
+    params: {
+      lawId,
+      articleNumber,
+    },
+  })
+}
