@@ -1160,13 +1160,18 @@ function handleExportCommand(command: string) {
 
 // 导出为PDF
 async function exportToPDF() {
-  if (!reviewResult.value || !conversationId.value) {
+  if (!reviewResult.value) {
     ElMessage.warning('没有可导出的内容')
     return
   }
 
   try {
     ElMessage.info('正在生成PDF文件...')
+
+    // 如果没有conversationId，先获取一个
+    if (!conversationId.value) {
+      conversationId.value = await getConversationId()
+    }
 
     const downloadRequest: FileDownloadRequest = {
       isChange: false, // 默认false，后续可根据实际需求调整
@@ -1195,13 +1200,18 @@ async function exportToPDF() {
 
 // 导出为Word
 async function exportToWord() {
-  if (!reviewResult.value || !conversationId.value) {
+  if (!reviewResult.value) {
     ElMessage.warning('没有可导出的内容')
     return
   }
 
   try {
     ElMessage.info('正在生成Word文件...')
+
+    // 如果没有conversationId，先获取一个
+    if (!conversationId.value) {
+      conversationId.value = await getConversationId()
+    }
 
     const downloadRequest: FileDownloadRequest = {
       isChange: false, // 默认false，后续可根据实际需求调整
