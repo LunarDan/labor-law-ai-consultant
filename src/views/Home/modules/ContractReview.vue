@@ -896,12 +896,29 @@ async function startReview() {
     )
 
     // 解析审查结果
-    parseReviewResult(reviewResponse.review)
+    const parseSuccess = parseReviewResult(reviewResponse.review)
 
-    // 审查完成后自动保存到历史
-    await saveToHistory()
+    // 只有解析成功时才继续处理
+    if (parseSuccess) {
+      // 审查完成后自动保存到历史
+      await saveToHistory()
 
-    ElMessage.success('审查完成')
+      // 检查是否有审查结果
+      const result = reviewResult.value as ReviewResult | null
+      const hasResults =
+        result !== null &&
+        ((result.illegalIssues?.length || 0) > 0 ||
+          (result.riskIssues?.length || 0) > 0 ||
+          (result.missingIssues?.length || 0) > 0)
+
+      // 只有当有审查结果时才显示成功提示
+      if (hasResults) {
+        ElMessage.success('审查完成，发现问题请查看右侧列表')
+      } else {
+        ElMessage.info('审查完成，未发现明显问题')
+      }
+    }
+    // 解析失败时，parseReviewResult 函数已经显示了错误消息，这里不需要额外处理
   } catch (error) {
     ElMessage.error('审查失败，请稍后重试')
   } finally {
@@ -959,12 +976,12 @@ function findTextPosition(
   return { startIndex: 0, endIndex: 0 }
 }
 
-// 解析审查结果
-function parseReviewResult(reviewText: string) {
+// 解析审查结果 - 返回是否解析成功
+function parseReviewResult(reviewText: string): boolean {
   if (!reviewText || typeof reviewText !== 'string') {
     ElMessage.error('审查结果格式错误')
     reviewing.value = false
-    return
+    return false
   }
 
   try {
@@ -1067,15 +1084,17 @@ function parseReviewResult(reviewText: string) {
         missingIssues,
       }
 
-      return
+      return true
     }
 
     // 如果解析失败，显示错误
     ElMessage.error('审查结果解析失败，请重试')
     reviewing.value = false
+    return false
   } catch (error) {
     ElMessage.error('审查结果解析失败，请重试')
     reviewing.value = false
+    return false
   }
 }
 

@@ -140,3 +140,130 @@ export const createNewChatWithTitle = async (
   // response 本身就是新的 conversationId（字符串）
   return (response as unknown as string) || ''
 }
+
+/**
+ * AI问答咨询流式接口 - 使用 SSE (Server-Sent Events)
+ * @param data 咨询请求参数
+ * @param onMessage 接收流式消息的回调函数
+ * @param onError 错误处理回调函数
+ * @param onComplete 完成后的回调函数
+ * @returns Promise<void>
+ */
+export const chatConsultStream = async (
+  requestData: ChatConsultRequest,
+  onMessage: (chunk: string) => void,
+  onError: (error: Error) => void,
+  onComplete: () => void,
+): Promise<void> => {
+  const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+  const token = localStorage.getItem('token')
+
+  // 创建 AbortController 用于超时控制
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 120000) // 120秒超时
+
+  try {
+    // 使用 fetch API 进行流式请求
+    const response = await fetch(`${baseURL}/chat/consult/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token ? `Bearer ${token}` : '',
+      },
+      body: JSON.stringify(requestData),
+      signal: controller.signal,
+    })
+
+    // 清除超时定时器
+    clearTimeout(timeoutId)
+
+    if (!response.ok) {
+      // 尝试解析错误响应
+      try {
+        const errorData = await response.json()
+        const errorMessage = errorData.message || `HTTP error! status: ${response.status}`
+        throw new Error(errorMessage)
+      } catch (parseError) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+    }
+
+    if (!response.body) {
+      throw new Error('Response body is null')
+    }
+
+    // 读取流式响应
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+
+      if (done) {
+        // 流结束
+        clearTimeout(timeoutId)
+        onComplete()
+        break
+      }
+
+      // 解码当前块
+      const chunk = decoder.decode(value, { stream: true })
+      buffer += chunk
+
+      // 按行分割数据（SSE 格式）
+      const lines = buffer.split('\n')
+      // 保留最后一个不完整的行
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        const trimmedLine = line.trim()
+
+        // 跳过空行和注释
+        if (!trimmedLine || trimmedLine.startsWith(':')) {
+          continue
+        }
+
+        // 解析 SSE 数据格式：data: 内容
+        if (trimmedLine.startsWith('data:')) {
+          const data = trimmedLine.slice(5).trim()
+
+          // SSE 流结束标记
+          if (data === '[DONE]') {
+            clearTimeout(timeoutId)
+            onComplete()
+            return
+          }
+
+          // 处理数据（可能是 JSON 或纯文本）
+          try {
+            // 尝试解析 JSON
+            const jsonData = JSON.parse(data)
+            if (jsonData.content || jsonData.data) {
+              onMessage(jsonData.content || jsonData.data)
+            } else {
+              onMessage(data)
+            }
+          } catch {
+            // 不是 JSON，直接作为文本处理
+            onMessage(data)
+          }
+        }
+      }
+    }
+  } catch (error: any) {
+    clearTimeout(timeoutId)
+
+    // 处理特定的错误类型
+    if (error.name === 'AbortError') {
+      onError(new Error('请求超时，请稍后重试'))
+    } else if (
+      error.message.includes('HttpConnectTimeoutException') ||
+      error.message.includes('timed out')
+    ) {
+      onError(new Error('AI服务连接超时，请稍后重试'))
+    } else {
+      onError(error as Error)
+    }
+  }
+}

@@ -179,27 +179,54 @@
             检索到 <span class="result-count">{{ articles.length }}</span> 条相关结果
           </div>
 
-          <el-scrollbar ref="scrollbarRef" class="articles-container" @scroll="handleScroll">
+          <!-- 单一法律模式：顶部显示法律标题 -->
+          <div v-if="isSingleLawMode && singleLawInfo" class="single-law-header">
+            <div class="header-content" @click="toggleSingleLawExpand">
+              <div class="header-left">
+                <h2 class="law-title">《{{ singleLawInfo.lawName }}》</h2>
+                <div class="law-meta">
+                  <span v-if="singleLawInfo.issueYear" class="law-year">
+                    发布年份：{{ singleLawInfo.issueYear }}
+                  </span>
+                  <span v-if="singleLawInfo.totalArticleCount" class="law-count">
+                    共{{ singleLawInfo.totalArticleCount }}条
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <el-scrollbar
+            v-if="!isSingleLawMode || singleLawExpanded"
+            ref="scrollbarRef"
+            class="articles-container"
+            @scroll="handleScroll"
+          >
             <div
               v-for="(article, index) in articles"
               :id="'article-' + article.id"
               :key="article.id"
               :ref="(el) => setArticleRef(el, index)"
               class="article-item"
-              :class="{ collapsed: !article.isExpanded }"
+              :class="{ collapsed: !article.isExpanded, 'single-law-mode': isSingleLawMode }"
             >
               <!-- 折叠状态：只显示标题、年份、条数 -->
               <div v-if="!article.isExpanded" class="article-collapsed">
                 <div class="collapsed-header" @click="toggleArticleExpand(article)">
                   <div class="collapsed-info">
-                    <h3 class="collapsed-title">
+                    <!-- 单一法律模式：只显示条数 -->
+                    <h3 v-if="isSingleLawMode" class="collapsed-title-simple">
+                      {{ article.articleNumber }}
+                    </h3>
+                    <!-- 搜索结果模式：显示完整法律名称 -->
+                    <h3 v-else class="collapsed-title">
                       《{{ article.lawName }}》
                       <span v-if="article.issueYear" class="issue-year">
                         发布年份：{{ article.issueYear }}
                       </span>
                     </h3>
                   </div>
-                  <div class="article-number-box" @click.stop>
+                  <div v-if="!isSingleLawMode" class="article-number-box" @click.stop>
                     第
                     <input
                       v-model.number="article.currentArticleNum"
@@ -218,8 +245,9 @@
 
               <!-- 展开状态：显示完整内容 -->
               <div v-else class="article-expanded">
-                <!-- 法律名称和发布年份 -->
-                <div class="article-header">
+                <!-- 单一法律模式：不显示法律标题 -->
+                <!-- 搜索结果模式：显示法律名称和发布年份 -->
+                <div v-if="!isSingleLawMode" class="article-header">
                   <div class="header-left" @click="toggleArticleExpand(article)">
                     <h3 class="article-title">
                       《{{ article.lawName }}》
@@ -525,6 +553,15 @@ const showSearchHistory = ref<boolean>(false)
 const searchHistoryList = ref<string[]>([])
 const searchResultCount = ref<number>(0)
 
+// 展示模式标记
+const isSingleLawMode = ref<boolean>(false) // 是否为单一法律展示模式（国家法规/地方法规）
+const singleLawInfo = ref<{
+  lawName: string
+  issueYear: string
+  totalArticleCount: number
+} | null>(null) // 单一法律的信息
+const singleLawExpanded = ref<boolean>(true) // 单一法律是否展开（展开显示所有子法条）
+
 // 法律法规的多级分类数据（从API动态加载）
 const lawPrimaryCategories = ref<PrimaryCategory[]>([])
 
@@ -815,6 +852,11 @@ async function loadRecommendations() {
   }
 
   try {
+    // 推荐结果禁用单一法律模式
+    isSingleLawMode.value = false
+    singleLawInfo.value = null
+    singleLawExpanded.value = true
+
     // 调用API查询相关法条
     const requestData: KnowledgeQueryRequest = {
       question: queryQuestion,
@@ -1022,8 +1064,9 @@ function toggleLawDisplay(lawId: string) {
     // 已选中，移除
     selectedLawIds.value.splice(index, 1)
   } else {
-    // 未选中，添加
-    selectedLawIds.value.push(lawId)
+    // 未选中，先清空所有选中的法律，然后只添加当前点击的法律
+    // 这样确保每次只展示一部法律（单一法律模式）
+    selectedLawIds.value = [lawId]
   }
 
   // 更新右侧显示
@@ -1098,13 +1141,36 @@ async function loadArticlesBySelectedLaws() {
       })
     })
 
-    // 将最后一个法条设为展开状态
-    if (convertedArticles.length > 0) {
-      convertedArticles[convertedArticles.length - 1].isExpanded = true
-    }
-
     articles.value = convertedArticles
     recommendationText.value = ''
+
+    // 判断是否为单一法律模式
+    if (selectedLawsData.length === 1) {
+      // 单一法律，启用单一法律模式
+      isSingleLawMode.value = true
+      singleLawExpanded.value = true // 默认展开
+      const lawData = selectedLawsData[0]
+      singleLawInfo.value = {
+        lawName: lawData.lawName,
+        issueYear: lawData.regulations[0]?.issueYear || '',
+        totalArticleCount: lawData.regulations.length,
+      }
+
+      // 单一法律模式下，所有子法条都展开
+      articles.value.forEach((article) => {
+        article.isExpanded = true
+      })
+    } else {
+      // 多部法律，禁用单一法律模式
+      isSingleLawMode.value = false
+      singleLawInfo.value = null
+      singleLawExpanded.value = true // 重置状态
+
+      // 多部法律模式下，只展开最后一个法条
+      if (convertedArticles.length > 0) {
+        convertedArticles[convertedArticles.length - 1].isExpanded = true
+      }
+    }
 
     // 更新当前法条编号
     if (articles.value.length > 0) {
@@ -1182,6 +1248,10 @@ function selectScenario(scenario: ScenarioItem) {
 async function searchByScenarioName(scenarioName: string) {
   loading.value = true
   recommendationText.value = `常见场景：${scenarioName}`
+  // 搜索结果禁用单一法律模式
+  isSingleLawMode.value = false
+  singleLawInfo.value = null
+  singleLawExpanded.value = true
 
   try {
     const requestData: KnowledgeQueryRequest = {
@@ -1236,6 +1306,10 @@ function selectTopic(topic: ScenarioItem) {
 async function searchByTopicName(topicName: string) {
   loading.value = true
   recommendationText.value = `热点专题：${topicName}`
+  // 搜索结果禁用单一法律模式
+  isSingleLawMode.value = false
+  singleLawInfo.value = null
+  singleLawExpanded.value = true
 
   try {
     const requestData: KnowledgeQueryRequest = {
@@ -1293,6 +1367,10 @@ async function handleSearch() {
   loading.value = true
   recommendationText.value = ''
   showBackButton.value = false
+  // 搜索结果禁用单一法律模式
+  isSingleLawMode.value = false
+  singleLawInfo.value = null
+  singleLawExpanded.value = true
 
   try {
     // 调用真实API
@@ -1445,11 +1523,49 @@ async function searchRelatedArticle(related: RelatedArticle) {
   await handleSearch()
 }
 
+// 切换单一法律的整体展开/折叠状态
+function toggleSingleLawExpand() {
+  singleLawExpanded.value = !singleLawExpanded.value
+}
+
 // 切换法条展开/折叠状态
 function toggleArticleExpand(article: LawArticle) {
-  // 通过索引查找并切换展开状态，确保响应式更新
+  // 单一法律模式下，子法条不能折叠
+  if (isSingleLawMode.value) {
+    return
+  }
+
+  // 通过索引查找法条
   const index = articles.value.findIndex((a) => a.id === article.id)
-  if (index !== -1) {
+  if (index === -1) return
+
+  const isLastArticle = index === articles.value.length - 1
+
+  // 如果点击的法条不是最后一个，则将其移动到最下方
+  if (!isLastArticle) {
+    // 将所有法条折叠起来
+    articles.value.forEach((item) => {
+      item.isExpanded = false
+    })
+
+    // 移除当前位置的法条
+    const [targetArticle] = articles.value.splice(index, 1)
+
+    // 将法条添加到最后
+    articles.value.push(targetArticle)
+
+    // 展开该法条
+    targetArticle.isExpanded = true
+
+    // 滚动到最后一个法条
+    nextTick(() => {
+      const lastArticleElement = document.getElementById(`article-${targetArticle.id}`)
+      if (lastArticleElement) {
+        lastArticleElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    })
+  } else {
+    // 如果是最后一个，只切换展开/折叠状态
     articles.value[index].isExpanded = !articles.value[index].isExpanded
   }
 }
@@ -1665,6 +1781,10 @@ async function loadArticleFromFavorite(article: LawArticle) {
   searchKeyword.value = '' // 清空搜索关键词
   loading.value = true
   showBackButton.value = false
+  // 收藏列表禁用单一法律模式
+  isSingleLawMode.value = false
+  singleLawInfo.value = null
+  singleLawExpanded.value = true
 
   try {
     // 如果有 lawId，以及 articleNumber，查询完整信息以获取总条数
@@ -2138,6 +2258,58 @@ async function loadArticleFromFavorite(article: LawArticle) {
         flex-direction: column;
         overflow: hidden;
 
+        // 单一法律模式：顶部固定标题
+        .single-law-header {
+          padding: 20px 24px;
+          border-bottom: 2px solid #409eff;
+          background: linear-gradient(135deg, #f5f7fa 0%, #ecf5ff 100%);
+          flex-shrink: 0;
+
+          .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            padding: 8px;
+            margin: -8px;
+            border-radius: 8px;
+
+            &:hover {
+              background: rgba(64, 158, 255, 0.1);
+            }
+
+            .header-left {
+              flex: 1;
+
+              .law-title {
+                font-size: 20px;
+                font-weight: 600;
+                color: #303133;
+                margin: 0 0 8px 0;
+              }
+
+              .law-meta {
+                display: flex;
+                align-items: center;
+                gap: 20px;
+                font-size: 14px;
+                color: #606266;
+
+                .law-year {
+                  color: #909399;
+                }
+
+                .law-count {
+                  color: #409eff;
+                  font-weight: 500;
+                }
+              }
+            }
+          }
+        }
+
         .search-result-info {
           margin: 20px 24px 16px 24px;
           padding: 12px 16px;
@@ -2165,6 +2337,38 @@ async function loadArticleFromFavorite(article: LawArticle) {
 
             &:last-child {
               border-bottom: none;
+            }
+
+            // 单一法律模式：更紧凑的样式，所有子法条展开且不可点击
+            &.single-law-mode {
+              .article-expanded {
+                padding: 16px 20px;
+                cursor: default; // 不可点击
+              }
+
+              // 在单一法律模式下，不应该有折叠状态
+              // 但为了防御性编程，还是添加样式
+              &.collapsed {
+                .article-collapsed {
+                  .collapsed-header {
+                    padding: 10px 20px;
+                    cursor: default; // 不可点击
+
+                    &:hover {
+                      background: #fff; // 禁用悬停效果
+                    }
+
+                    .collapsed-info {
+                      .collapsed-title-simple {
+                        font-size: 14px;
+                        font-weight: 500;
+                        color: #606266;
+                        margin: 0;
+                      }
+                    }
+                  }
+                }
+              }
             }
 
             // 折叠状态样式
@@ -2202,6 +2406,13 @@ async function loadArticleFromFavorite(article: LawArticle) {
                         font-weight: normal;
                         color: #909399;
                       }
+                    }
+
+                    .collapsed-title-simple {
+                      font-size: 14px;
+                      font-weight: 500;
+                      color: #606266;
+                      margin: 0;
                     }
                   }
 

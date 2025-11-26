@@ -38,6 +38,7 @@ import { useAuthStore } from '@/stores/auth'
 import CategoryMenu from './components/CategoryMenu.vue'
 import { getSecondaryQuestionTitles } from '@/api/chat'
 import type { SecondaryQuestionTitle } from '@/types'
+import { ElMessage } from 'element-plus'
 
 const route = useRoute()
 const router = useRouter()
@@ -123,6 +124,20 @@ onMounted(() => {
   loadCategories()
   // 监听从知识库切换到AI咨询的事件
   window.addEventListener('switchToAIConsult', handleSwitchToAIConsult as EventListener)
+
+  // 检查是否刚登录成功，如果是则显示欢迎消息
+  const justLoggedIn = localStorage.getItem('justLoggedIn')
+  if (justLoggedIn === 'true') {
+    // 清除标志
+    localStorage.removeItem('justLoggedIn')
+    // 显示登录成功消息，持续2秒
+    ElMessage({
+      message: '登录成功，欢迎回来！',
+      type: 'success',
+      duration: 2000,
+      showClose: true,
+    })
+  }
 })
 
 // 当前选中的问题内容

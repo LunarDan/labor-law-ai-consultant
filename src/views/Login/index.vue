@@ -156,7 +156,8 @@ const handleLogin = async () => {
       // 保存记住我状态
       authStore.setRememberMe(form.rememberMe || false)
 
-      ElMessage.success('登录成功')
+      // 设置登录成功标志，在home页显示提示
+      localStorage.setItem('justLoggedIn', 'true')
 
       // 强制刷新页面到home，确保路由守卫使用最新的登录状态
       window.location.href = '/home'
