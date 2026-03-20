@@ -11,78 +11,8 @@
 
       <!-- 业务页面：展示用户登录信息 -->
       <div v-if="!isAuthPage && authStore.isLoggedIn" class="user-info">
-        <!-- 对话操作按钮 -->
-        <div class="chat-actions">
-          <el-tooltip :content="'开启新对话'" placement="bottom" :show-after="300">
-            <div
-              class="chat-action-btn"
-              @click="handleNewChat"
-              @mouseenter="hoverAction = 'new'"
-              @mouseleave="hoverAction = ''"
-            >
-              <img src="@/assets/images/newtalk.png" alt="新对话" class="action-icon" />
-              <div v-if="hoverAction === 'new'" class="indicator"></div>
-            </div>
-          </el-tooltip>
-
-          <!-- 历史对话下拉弹窗 -->
-          <el-popover
-            v-model:visible="showHistoryPopover"
-            placement="bottom"
-            :width="320"
-            trigger="manual"
-            popper-class="history-popover"
-          >
-            <template #reference>
-              <div
-                class="chat-action-btn"
-                :class="{ active: showHistoryPopover }"
-                @click="toggleHistoryPopover"
-                @mouseenter="hoverAction = 'history'"
-                @mouseleave="hoverAction = ''"
-              >
-                <el-tooltip :content="'历史对话'" placement="bottom" :show-after="300">
-                  <img src="@/assets/images/historytalk.png" alt="历史对话" class="action-icon" />
-                </el-tooltip>
-                <div v-if="hoverAction === 'history' || showHistoryPopover" class="indicator"></div>
-              </div>
-            </template>
-
-            <!-- 历史对话列表 -->
-            <div class="history-dropdown">
-              <div class="history-dropdown-header">
-                <h4>历史对话</h4>
-              </div>
-              <el-scrollbar class="history-dropdown-list" height="680px">
-                <div v-for="(group, date) in groupedHistory" :key="date" class="date-group">
-                  <div class="date-label">{{ formatDateLabel(date) }}</div>
-                  <div
-                    v-for="item in group"
-                    :key="item.id"
-                    class="history-item"
-                    :class="{ active: currentChatId === item.id }"
-                    @click="loadHistoryChat(item.id)"
-                    @mouseenter="hoveredItemId = item.id"
-                    @mouseleave="hoveredItemId = ''"
-                  >
-                    <div class="history-title">
-                      {{ item.title || '未命名对话' }}
-                    </div>
-                    <el-icon
-                      v-if="hoveredItemId === item.id"
-                      class="delete-icon"
-                      @click.stop="confirmDeleteChat(item.id)"
-                    >
-                      <component :is="DeleteIcon" />
-                    </el-icon>
-                  </div>
-                </div>
-                <div v-if="Object.keys(groupedHistory).length === 0" class="empty-history">
-                  <p>暂无历史对话</p>
-                </div>
-              </el-scrollbar>
-            </div>
-          </el-popover>
+        <div class="chat-entry">
+          <el-button class="chat-entry-btn" @click="openChatDrawer">对话</el-button>
         </div>
 
         <el-dropdown trigger="click" @command="handleCommand">
@@ -131,6 +61,40 @@
         </el-dropdown>
       </div>
     </div>
+
+    <el-drawer v-model="showChatDrawer" title="对话" size="360px" class="chat-drawer">
+      <div class="chat-drawer-actions">
+        <el-button type="primary" plain @click="handleNewChat">开启新对话</el-button>
+      </div>
+      <el-scrollbar class="chat-drawer-list">
+        <div v-for="(group, date) in groupedHistory" :key="date" class="date-group">
+          <div class="date-label">{{ formatDateLabel(date) }}</div>
+          <div
+            v-for="item in group"
+            :key="item.id"
+            class="history-item"
+            :class="{ active: currentChatId === item.id }"
+            @click="loadHistoryChat(item.id)"
+            @mouseenter="hoveredItemId = item.id"
+            @mouseleave="hoveredItemId = ''"
+          >
+            <div class="history-title">
+              {{ item.title || '未命名对话' }}
+            </div>
+            <el-icon
+              v-if="hoveredItemId === item.id"
+              class="delete-icon"
+              @click.stop="confirmDeleteChat(item.id)"
+            >
+              <component :is="DeleteIcon" />
+            </el-icon>
+          </div>
+        </div>
+        <div v-if="Object.keys(groupedHistory).length === 0" class="empty-history">
+          <p>暂无历史对话</p>
+        </div>
+      </el-scrollbar>
+    </el-drawer>
 
     <!-- 修改密码弹窗 -->
     <el-dialog
@@ -224,11 +188,7 @@ const authStore = useAuthStore()
 // 用户头像
 const userAvatar = userAvatarImg
 
-// 对话操作状态
-const hoverAction = ref<'new' | 'history' | ''>()
-
-// 历史对话弹窗控制
-const showHistoryPopover = ref(false)
+const showChatDrawer = ref(false)
 const chatHistory = ref<ChatHistory[]>([])
 const currentChatId = ref<string>('')
 const hoveredItemId = ref<string>('')
@@ -509,18 +469,13 @@ const handleHistoryUpdate = async () => {
   }
 }
 
-// 切换历史对话弹窗
-const toggleHistoryPopover = async () => {
-  showHistoryPopover.value = !showHistoryPopover.value
-  if (showHistoryPopover.value) {
-    // loadChatHistoriesFromApi内部会先加载本地数据，然后合并API数据
-    try {
-      await loadChatHistoriesFromApi()
-    } catch (error) {
-      // API失败时，确保加载本地数据
-      if (chatHistory.value.length === 0) {
-        loadChatHistory()
-      }
+const openChatDrawer = async () => {
+  showChatDrawer.value = true
+  try {
+    await loadChatHistoriesFromApi()
+  } catch (error) {
+    if (chatHistory.value.length === 0) {
+      loadChatHistory()
     }
   }
 }
@@ -763,7 +718,7 @@ const handleNewChat = async () => {
 
     // 清空当前对话ID
     currentChatId.value = ''
-    showHistoryPopover.value = false // 关闭历史对话弹窗
+    showChatDrawer.value = false
 
     // 触发事件，让AiConsult组件知道，并传递新的conversationId
     window.dispatchEvent(
@@ -781,7 +736,7 @@ const loadHistoryChat = (chatId: string) => {
   const chat = chatHistory.value.find((item) => item.id === chatId)
   if (chat) {
     currentChatId.value = chatId
-    showHistoryPopover.value = false
+    showChatDrawer.value = false
 
     // 触发事件，传递对话数据（包括 conversationId）
     // 如果有conversationId，AiConsult会优先从API加载最新消息
@@ -860,383 +815,9 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
-.header {
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  padding: 0.75rem 2rem;
-}
-
-.header-content {
-  max-width: 1400px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-}
-
-.left {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-right: auto; // 将右侧内容推到右边
-}
-
-.logo-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
-  object-fit: contain;
-}
-
-.logo-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.logo-text {
-  font-size: 1.2rem;
-  color: #1e3a5f;
-  margin: 0;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.logo-subtitle {
-  font-size: 0.75rem;
-  color: #6b7280;
-  margin: 0;
-  line-height: 1;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-right: -220px; //右移修改
-}
-
-.chat-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border: 1.5px solid #e4e7ed;
-  border-radius: 50px;
-  background: #fff;
-  transition: all 0.3s ease;
-
-  &:hover {
-    border-color: #c0c4cc;
-  }
-}
-
-.chat-action-btn {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border-radius: 50%;
-  transition: all 0.3s ease;
-
-  &:hover {
-    background: #f5f7fa;
-  }
-
-  &.active {
-    background: #ecf5ff;
-  }
-
-  .action-icon {
-    width: 24px;
-    height: 24px;
-    object-fit: contain;
-  }
-
-  .indicator {
-    position: absolute;
-    bottom: 4px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #409eff;
-    animation: fadeIn 0.3s ease;
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
-.user-dropdown {
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-
-  &:hover {
-    opacity: 0.8;
-  }
-}
-
-.avatar {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: #fff;
-  font-weight: 600;
-  font-size: 1rem;
-}
-
-// 下拉菜单样式
-:deep(.el-dropdown-menu) {
-  min-width: 220px;
-  padding: 8px 0;
-}
-
-:deep(.user-info-item) {
-  cursor: default !important;
-
-  &:hover {
-    background: transparent !important;
-  }
-}
-
-.user-details {
-  padding: 8px 12px;
-}
-
-.user-name-row,
-.user-id-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-}
-
-.label {
-  font-size: 14px;
-  color: #909399;
-  min-width: 70px;
-}
-
-.name-edit {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.username-text {
-  font-size: 14px;
-  color: #303133;
-  font-weight: 500;
-}
-
-.edit-icon {
-  color: #409eff;
-  cursor: pointer;
-  font-size: 14px;
-
-  &:hover {
-    color: #66b1ff;
-  }
-}
-
-.user-id {
-  font-size: 14px;
-  color: #606266;
-  font-family: 'Courier New', monospace;
-}
-
-// 修改密码弹窗样式
-.dialog-hint {
-  text-align: right;
-  margin-top: -8px;
-  margin-bottom: 12px;
-}
-
-:deep(.el-dialog__header) {
-  padding: 20px 20px 10px;
-  text-align: center;
-
-  .el-dialog__title {
-    font-size: 18px;
-    font-weight: 600;
-  }
-}
-
-:deep(.el-dialog__body) {
-  padding: 20px;
-}
-
-:deep(.el-dialog__footer) {
-  padding: 10px 20px 20px;
-}
-
-:deep(.el-dropdown-menu__item) {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-
-  .el-icon {
-    font-size: 16px;
-  }
-}
+@use '@/assets/css/components/header.scss' as *;
 </style>
 
 <style lang="scss">
-// 历史对话弹窗样式（全局样式，因为 popover 是传送到 body 的）
-.history-popover {
-  padding: 0 !important;
-
-  .history-dropdown {
-    .history-dropdown-header {
-      padding: 12px 16px;
-      border-bottom: 1px solid #e4e7ed;
-
-      h4 {
-        margin: 0;
-        font-size: 15px;
-        font-weight: 600;
-        color: #303133;
-      }
-    }
-
-    .history-dropdown-list {
-      // 确保滚动条可见
-      height: 680px;
-      overflow: hidden;
-
-      // Element Plus scrollbar 样式
-      .el-scrollbar__wrap {
-        overflow-x: hidden;
-        overflow-y: auto;
-
-        // 自定义滚动条样式
-        &::-webkit-scrollbar {
-          width: 8px;
-        }
-
-        &::-webkit-scrollbar-track {
-          background: #f1f1f1;
-          border-radius: 4px;
-        }
-
-        &::-webkit-scrollbar-thumb {
-          background: #c1c1c1;
-          border-radius: 4px;
-
-          &:hover {
-            background: #a8a8a8;
-          }
-        }
-      }
-
-      .el-scrollbar__view {
-        padding: 0;
-      }
-
-      // Element Plus 滚动条轨道
-      .el-scrollbar__bar {
-        opacity: 1 !important;
-
-        &.is-vertical {
-          right: 2px;
-          width: 6px;
-
-          .el-scrollbar__thumb {
-            background-color: rgba(144, 147, 153, 0.5);
-            border-radius: 3px;
-
-            &:hover {
-              background-color: rgba(144, 147, 153, 0.7);
-            }
-          }
-        }
-      }
-
-      .date-group {
-        margin-bottom: 8px;
-
-        .date-label {
-          padding: 8px 16px;
-          font-size: 12px;
-          color: #909399;
-          font-weight: 500;
-          background: #f5f7fa;
-          position: sticky;
-          top: 0;
-          z-index: 1;
-        }
-
-        .history-item {
-          padding: 10px 16px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          transition: background 0.2s;
-
-          &:hover {
-            background: #f5f7fa;
-          }
-
-          &.active {
-            background: #ecf5ff;
-
-            .history-title {
-              color: #409eff;
-              font-weight: 500;
-            }
-          }
-
-          .history-title {
-            flex: 1;
-            font-size: 14px;
-            color: #303133;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            padding-right: 8px;
-          }
-
-          .delete-icon {
-            font-size: 16px;
-            color: #909399;
-            cursor: pointer;
-            flex-shrink: 0;
-
-            &:hover {
-              color: #f56c6c;
-            }
-          }
-        }
-      }
-
-      .empty-history {
-        padding: 32px 16px;
-        text-align: center;
-
-        p {
-          margin: 0;
-          font-size: 14px;
-          color: #909399;
-        }
-      }
-    }
-  }
-}
+@use '@/assets/css/components/header.global.scss' as *;
 </style>

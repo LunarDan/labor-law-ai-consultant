@@ -142,12 +142,12 @@ const handleLogin = async () => {
       authStore.setToken(res.accessToken)
       authStore.setRefreshToken(res.refreshToken)
 
-      // 后端返回的是扁平结构，需要手动组装 userInfo
+      // 组装 userInfo
       const userInfo = {
         id: res.id,
         userId: res.userId,
         username: res.username,
-        phone: form.phone, // 使用表单中的手机号
+        phone: form.phone,
         userType: form.userType,
       }
       authStore.setUserInfo(userInfo)

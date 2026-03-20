@@ -3,14 +3,14 @@ export type UserType = '1' | '2'
 
 // 用户信息
 export interface UserInfo {
-  id?: number // ID编号 (数据库主键，integer)
-  userId?: string | null // 6位数用户ID
-  username: string // 用户名
-  phone?: string // 手机号
-  email?: string // 邮箱
-  userType?: UserType // 用户类型
-  createdAt?: string // 创建时间
-  updatedAt?: string // 更新时间
+  id?: number // ID编号
+  userId?: string | null // 用户ID
+  username: string
+  phone?: string
+  email?: string
+  userType?: UserType
+  createdAt?: string
+  updatedAt?: string
 }
 
 // 获取用户信息响应
@@ -51,7 +51,7 @@ export interface ResetPasswordRequest {
 
 // 修改密码请求
 export interface ChangePasswordRequest {
-  userId: number // 根据接口文档，userId 是 integer 类型
+  userId: number
   oldPassword: string
   newPassword: string
 }
@@ -63,14 +63,13 @@ export interface ApiResponse<T = any> {
   data: T
 }
 
-// 登录响应（双 Token）- 后端返回的是扁平结构
+// 登录响应（双 Token）
 export interface LoginResponse {
   accessToken: string
   refreshToken: string
   userId: string
   username: string
   id: number
-  // 注意：后端返回的是扁平结构，不是嵌套的 userInfo 对象
 }
 
 // 刷新 Token 响应数据
@@ -95,7 +94,7 @@ export interface RefreshTokenResponse {
 
 // 修改用户名请求
 export interface UpdateUsernameRequest {
-  userId: number // 修改为 number 类型，与其他 API 保持一致
+  userId: number
   newUsername: string
 }
 
@@ -111,7 +110,7 @@ export interface ChatConsultRequest {
 export interface ChatConsultResponse {
   code?: number
   message?: string
-  data?: string // AI 回复内容（根据API文档）
+  data?: string // AI 回复内容
   success?: boolean
   timestamp?: number
   conversationId?: string // 对话ID
@@ -128,7 +127,7 @@ export interface SecondaryQuestionTitle {
 export interface SecondaryQuestionTitlesResponse {
   code: number
   message: string
-  data: SecondaryQuestionTitle[][] // 二维数组
+  data: SecondaryQuestionTitle[][]
   success: boolean
   timestamp: number
 }

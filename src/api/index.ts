@@ -6,7 +6,7 @@ import axios, {
 
 // 从环境变量获取配置
 const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
-const timeout = Number(import.meta.env.VITE_API_TIMEOUT) || 60000 // 默认60秒
+const timeout = Number(import.meta.env.VITE_API_TIMEOUT) || 60000
 
 const request: AxiosInstance = axios.create({
   baseURL,
@@ -38,7 +38,6 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   (response: AxiosResponse) => {
     // 返回data字段中的实际数据
-    // 如果有 response.data.data 字段，返回它；否则返回 response.data
     if (response.data && typeof response.data === 'object' && 'data' in response.data) {
       return response.data.data
     }
@@ -83,10 +82,10 @@ request.interceptors.response.use(
     isRefreshing = true
 
     try {
-      // 获取当前的 accessToken（虽然已过期，但刷新接口需要在 header 中传递）
+      // 获取当前的 accessToken
       const currentToken = localStorage.getItem('token')
 
-      // 调用刷新接口 - 使用POST方法，refreshToken作为query参数
+      // 使用POST方法，refreshToken作为query参数
       const response = await axios.post(`${request.defaults.baseURL}/user/refresh-token`, null, {
         params: { refreshToken },
         headers: {

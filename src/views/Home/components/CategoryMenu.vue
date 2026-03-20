@@ -70,11 +70,12 @@ function truncateText(text: string, maxLength: number): string {
   overflow: hidden;
 
   .title {
-    padding: 16px 20px;
+    padding: 14px 16px 10px;
     font-size: 16px;
-    font-weight: 600;
-    color: #303133;
-    border-bottom: 1px solid #e4e7ed;
+    font-weight: 700;
+    color: var(--app-text-secondary);
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--app-border);
     flex-shrink: 0;
   }
 
@@ -83,7 +84,7 @@ function truncateText(text: string, maxLength: number): string {
     overflow: hidden;
 
     :deep(.el-scrollbar__view) {
-      padding: 8px 0;
+      padding: 8px 8px 12px;
     }
 
     :deep(.el-scrollbar__wrap) {
@@ -95,38 +96,51 @@ function truncateText(text: string, maxLength: number): string {
     border-right: none;
 
     :deep(.el-sub-menu__title) {
-      height: 48px;
-      line-height: 48px;
+      height: 42px;
+      line-height: 42px;
       font-size: 14px;
-      font-weight: 500;
+      font-weight: 600;
+      border-radius: 10px;
+      color: var(--app-text);
 
       .primary-title {
-        color: #303133;
+        color: var(--app-text);
       }
 
       &:hover {
-        background-color: #f5f7fa;
+        background-color: var(--app-surface-2);
       }
     }
 
     :deep(.el-menu-item) {
-      height: 44px;
-      line-height: 44px;
-      padding-left: 48px !important;
+      height: 40px;
+      line-height: 40px;
+      padding-left: 36px !important;
+      border-radius: 10px;
 
       .secondary-title {
-        color: #606266;
-        font-size: 14px;
+        color: var(--app-text-secondary);
+        font-size: 13px;
       }
 
       &:hover {
-        background-color: #ecf5ff;
-        color: #409eff;
+        background-color: color-mix(in srgb, var(--el-color-primary) 10%, transparent);
+        color: var(--el-color-primary);
 
         .secondary-title {
-          color: #409eff;
+          color: var(--el-color-primary);
         }
       }
+    }
+
+    :deep(.el-menu-item.is-active) {
+      background-color: color-mix(in srgb, var(--el-color-primary) 14%, transparent);
+      color: var(--el-color-primary);
+      font-weight: 600;
+    }
+
+    :deep(.el-sub-menu__title.is-active) {
+      color: var(--el-color-primary);
     }
   }
 }

@@ -896,7 +896,8 @@ async function startReview() {
     )
 
     // 解析审查结果
-    const parseSuccess = parseReviewResult(reviewResponse.review)
+    const reviewPayload = (reviewResponse as any)?.review ?? reviewResponse
+    const parseSuccess = parseReviewResult(reviewPayload)
 
     // 只有解析成功时才继续处理
     if (parseSuccess) {
@@ -919,8 +920,15 @@ async function startReview() {
       }
     }
     // 解析失败时，parseReviewResult 函数已经显示了错误消息，这里不需要额外处理
-  } catch (error) {
-    ElMessage.error('审查失败，请稍后重试')
+  } catch (error: any) {
+    const fallbackResponse = error?.response?.data?.data ?? error?.response?.data
+    const fallbackPayload = fallbackResponse?.review ?? fallbackResponse
+    const fallbackParsed = fallbackPayload ? parseReviewResult(fallbackPayload) : false
+
+    if (!fallbackParsed) {
+      const message = error?.response?.data?.message || error?.message || '审查失败，请稍后重试'
+      ElMessage.error(message)
+    }
   } finally {
     reviewing.value = false
   }
@@ -977,15 +985,29 @@ function findTextPosition(
 }
 
 // 解析审查结果 - 返回是否解析成功
-function parseReviewResult(reviewText: string): boolean {
-  if (!reviewText || typeof reviewText !== 'string') {
+function parseReviewResult(reviewData: unknown): boolean {
+  if (!reviewData) {
     ElMessage.error('审查结果格式错误')
     reviewing.value = false
     return false
   }
 
   try {
-    const parsed = JSON.parse(reviewText)
+    let parsed: any = null
+    if (typeof reviewData === 'string') {
+      const cleaned = reviewData
+        .replace(/```json\s*/i, '')
+        .replace(/```/g, '')
+        .trim()
+      if (!cleaned) {
+        ElMessage.error('审查结果解析失败，请重试')
+        reviewing.value = false
+        return false
+      }
+      parsed = JSON.parse(cleaned)
+    } else if (typeof reviewData === 'object') {
+      parsed = reviewData
+    }
 
     if (parsed && typeof parsed === 'object') {
       // 获取不同类型的问题数组
@@ -1022,7 +1044,7 @@ function parseReviewResult(reviewText: string): boolean {
               id: item.id || `illegal_${Date.now()}_${Math.random()}`,
               type: 'illegal' as const,
               originalText: originalTextContent,
-              relatedLaw: item.relatedClauses || item.relatedLaw || '',
+              relatedLaw: item.relatedClauses || item.relatedClaques || item.relatedLaw || '',
               suggestion: item.suggestion || '',
               startIndex: startIndex,
               endIndex: endIndex,
@@ -1057,7 +1079,7 @@ function parseReviewResult(reviewText: string): boolean {
               id: item.id || `risk_${Date.now()}_${Math.random()}`,
               type: 'risk' as const,
               originalText: originalTextContent,
-              relatedLaw: item.relatedClauses || item.relatedLaw || '',
+              relatedLaw: item.relatedClauses || item.relatedClaques || item.relatedLaw || '',
               suggestion: item.suggestion || '',
               startIndex: startIndex,
               endIndex: endIndex,
@@ -1071,7 +1093,7 @@ function parseReviewResult(reviewText: string): boolean {
             id: item.id || `missing_${Date.now()}_${Math.random()}`,
             type: 'missing' as const,
             originalText: item.originalSentence || item.originalText || '',
-            relatedLaw: item.relatedClauses || item.relatedLaw || '',
+            relatedLaw: item.relatedClauses || item.relatedClaques || item.relatedLaw || '',
             suggestion: item.suggestion || '',
             startIndex: 0,
             endIndex: 0,
@@ -1418,498 +1440,5 @@ initializeComponent()
 </script>
 
 <style scoped lang="scss">
-.contract-review {
-  display: flex;
-  gap: 20px;
-  height: calc(100vh - 180px);
-}
-
-.left-panel,
-.right-panel {
-  background: #fff;
-  border-radius: 8px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-}
-
-.left-panel {
-  width: 45%;
-  min-width: 500px;
-}
-
-.right-panel {
-  flex: 1;
-  min-width: 0;
-}
-
-.input-section {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-
-  .section-title {
-    font-size: 16px;
-    font-weight: 600;
-    color: #303133;
-    margin: 0;
-  }
-
-  .el-button {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-}
-
-.input-hint {
-  font-size: 12px;
-  color: #909399;
-  margin-bottom: 12px;
-}
-
-.text-display-container {
-  flex: 1;
-  margin-bottom: 16px;
-  border: 1px solid #dcdfe6;
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.text-display {
-  height: 100%;
-
-  :deep(.el-scrollbar__wrap) {
-    overflow-x: hidden;
-  }
-}
-
-.highlighted-text {
-  padding: 12px;
-  font-family: 'Microsoft YaHei', sans-serif;
-  font-size: 14px;
-  line-height: 1.8;
-  color: #303133;
-  min-height: 100%;
-  outline: none;
-  white-space: pre-wrap;
-  word-break: break-word;
-
-  :deep(.highlight-illegal) {
-    background-color: rgba(245, 108, 108, 0.15);
-    border-bottom: 2px solid #f56c6c;
-    cursor: pointer;
-    transition: all 0.3s;
-    padding: 2px 0;
-
-    &:hover {
-      background-color: rgba(245, 108, 108, 0.25);
-    }
-  }
-
-  :deep(.highlight-risk) {
-    background-color: rgba(230, 162, 60, 0.15);
-    border-bottom: 2px solid #e6a23c;
-    cursor: pointer;
-    transition: all 0.3s;
-    padding: 2px 0;
-
-    &:hover {
-      background-color: rgba(230, 162, 60, 0.25);
-    }
-  }
-
-  :deep(.flash-highlight) {
-    animation: flash 1.5s ease-in-out;
-  }
-}
-
-@keyframes flash {
-  0%,
-  100% {
-    background-color: transparent;
-  }
-  50% {
-    background-color: rgba(64, 158, 255, 0.3);
-  }
-}
-
-.contract-input {
-  flex: 1;
-  margin-bottom: 16px;
-
-  :deep(.el-textarea__inner) {
-    font-family: 'Microsoft YaHei', sans-serif;
-    font-size: 14px;
-    line-height: 1.8;
-    border-radius: 6px;
-    resize: none;
-
-    &:focus {
-      border-color: #409eff;
-    }
-  }
-}
-
-.action-buttons {
-  display: flex;
-  gap: 10px;
-
-  .primary-btn {
-    flex: 2;
-  }
-
-  .el-button {
-    font-size: 14px;
-  }
-}
-
-.result-section {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.empty-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #909399;
-  text-align: center;
-  padding: 24px;
-  gap: 12px;
-
-  .empty-icon {
-    color: #dcdfe6;
-  }
-
-  .empty-title {
-    font-size: 16px;
-    font-weight: 500;
-    color: #303133;
-  }
-
-  .empty-subtitle {
-    font-size: 14px;
-    color: #909399;
-    line-height: 1.6;
-  }
-}
-
-.reviewing-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-
-  .reviewing-text {
-    font-size: 16px;
-    font-weight: 400;
-    color: #409eff;
-    margin-top: 16px;
-  }
-}
-
-.result-content {
-  flex: 1;
-  margin-top: 12px;
-
-  :deep(.el-scrollbar__wrap) {
-    overflow-x: hidden;
-  }
-}
-
-.compliance-block {
-  background: #f0f9ff;
-  border: 1px solid #b3e0ff;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
-
-  .compliance-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-
-    .compliance-title {
-      font-size: 15px;
-      font-weight: 600;
-      color: #67c23a;
-    }
-  }
-}
-
-.issue-block {
-  margin-bottom: 20px;
-
-  .issue-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 12px;
-    padding: 8px 12px;
-    border-radius: 6px;
-
-    .issue-title {
-      font-size: 14px;
-      font-weight: 600;
-    }
-  }
-
-  &.illegal-block .issue-header {
-    background: #fef0f0;
-
-    .issue-title {
-      color: #f56c6c;
-    }
-  }
-
-  &.risk-block .issue-header {
-    background: #fdf6ec;
-
-    .issue-title {
-      color: #e6a23c;
-    }
-  }
-
-  &.missing-block .issue-header {
-    background: #f4f4f5;
-
-    .issue-title {
-      color: #909399;
-    }
-  }
-}
-
-.issue-item {
-  display: flex;
-  gap: 12px;
-  padding: 14px;
-  margin-bottom: 10px;
-  background: #fafafa;
-  border: 1px solid #e4e7ed;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.3s;
-
-  &:hover {
-    background: #f5f7fa;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  }
-
-  &.active {
-    background: #ecf5ff;
-    border-color: #409eff;
-  }
-
-  .issue-order {
-    width: 24px;
-    height: 24px;
-    background: #409eff;
-    color: #fff;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: 600;
-    flex-shrink: 0;
-  }
-
-  .issue-content {
-    flex: 1;
-    font-size: 13px;
-    line-height: 1.8;
-
-    .issue-original,
-    .issue-law,
-    .issue-suggestion {
-      margin-bottom: 8px;
-      color: #606266;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-
-      strong {
-        font-weight: 600;
-        color: #303133;
-      }
-    }
-
-    .issue-original {
-      color: #303133;
-    }
-
-    .issue-law {
-      color: #666;
-      font-size: 12px;
-    }
-
-    .issue-suggestion {
-      color: #409eff;
-      background: #ecf5ff;
-      padding: 6px 10px;
-      border-radius: 4px;
-      margin-top: 8px;
-    }
-  }
-}
-
-// 历史记录弹窗样式
-.history-dialog {
-  :deep(.el-dialog__body) {
-    padding: 0 20px 20px;
-  }
-}
-
-.history-scrollbar {
-  :deep(.el-scrollbar__wrap) {
-    overflow-x: hidden;
-  }
-}
-
-.history-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 400px;
-
-  .empty-text {
-    margin-top: 16px;
-    font-size: 14px;
-    color: #909399;
-  }
-}
-
-.history-list {
-  padding: 8px 0;
-}
-
-.history-group {
-  margin-bottom: 24px;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-
-  .group-date {
-    font-size: 13px;
-    font-weight: 600;
-    color: #909399;
-    padding: 8px 12px;
-    margin-bottom: 8px;
-    background: #f5f7fa;
-    border-radius: 4px;
-  }
-}
-
-.history-record {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  margin-bottom: 8px;
-  background: #fff;
-  border: 1px solid #e4e7ed;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.3s;
-
-  &:hover {
-    background: #f5f7fa;
-    border-color: #409eff;
-    box-shadow: 0 2px 8px rgba(64, 158, 255, 0.15);
-  }
-
-  .record-main {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .record-title {
-    font-size: 14px;
-    font-weight: 500;
-    color: #303133;
-    margin-bottom: 8px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .record-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-
-    .record-time {
-      font-size: 12px;
-      color: #909399;
-    }
-
-    .record-tag {
-      font-size: 12px;
-    }
-  }
-
-  .delete-icon {
-    flex-shrink: 0;
-    margin-left: 12px;
-    color: #f56c6c;
-    cursor: pointer;
-    transition: all 0.3s;
-
-    &:hover {
-      color: #f23c3c;
-      transform: scale(1.1);
-    }
-
-    &.loading {
-      color: #909399;
-      cursor: not-allowed;
-      animation: spin 1s linear infinite;
-
-      &:hover {
-        transform: none;
-        color: #909399;
-      }
-    }
-  }
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (max-width: 1400px) {
-  .contract-review {
-    flex-direction: column;
-    height: auto;
-  }
-
-  .left-panel {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .right-panel {
-    min-height: 600px;
-  }
-}
+@use '@/assets/css/pages/contract-review.scss' as *;
 </style>

@@ -35,12 +35,12 @@ export const getUserInfo = (userId: number): Promise<UserInfo> => {
   }) as Promise<UserInfo>
 }
 
-// 获取验证码（POST 方法，参数在 Query）
+// 获取验证码
 export const getVerifyCode = (data: VerifyCodeRequest): Promise<void> => {
   return request.post('/user/send-verify-code', null, { params: data })
 }
 
-// 重置密码（忘记密码）
+// 重置密码
 export const resetPassword = (data: ResetPasswordRequest): Promise<ApiResponse<string>> => {
   return request.patch('/user/forget', data) as Promise<ApiResponse<string>>
 }

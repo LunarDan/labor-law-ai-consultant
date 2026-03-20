@@ -152,7 +152,7 @@ const activeTab = computed({
   set: () => {},
 })
 
-// 是否显示侧边栏（只在AI咨询时显示）
+// 是否显示侧边栏
 const showSidebar = computed(() => activeTab.value === 'ai')
 
 // Tab切换处理
@@ -180,15 +180,15 @@ onUnmounted(() => {
 .home-container {
   display: flex;
   height: calc(100vh - 60px);
-  background: #f5f7fa;
+  background: var(--app-bg);
   overflow: hidden;
 }
 
 .left-sidebar {
-  width: 280px;
+  width: 260px;
   height: 100%;
-  background: #fff;
-  border-right: 1px solid #e4e7ed;
+  background: var(--app-surface);
+  border-right: 1px solid var(--app-border);
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -200,9 +200,9 @@ onUnmounted(() => {
   overflow: hidden;
 
   .tabs {
-    padding: 0 20px;
-    background: #fff;
-    border-bottom: 1px solid #e4e7ed;
+    padding: 8px 16px 0;
+    background: var(--app-surface);
+    border-bottom: 1px solid var(--app-border);
 
     :deep(.el-tabs__header) {
       margin: 0;
@@ -210,15 +210,22 @@ onUnmounted(() => {
 
     :deep(.el-tabs__nav) {
       width: 100%;
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      padding: 8px 0 12px;
     }
 
     :deep(.el-tabs__item) {
-      flex: 1;
+      height: 40px;
+      line-height: 40px;
       text-align: center;
       justify-content: center;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 500;
+      color: var(--app-text-secondary);
+      border-radius: 10px;
+      background: var(--app-surface-2);
     }
 
     :deep(.el-tabs__active-bar) {
@@ -226,16 +233,17 @@ onUnmounted(() => {
     }
 
     :deep(.el-tabs__item.is-active) {
-      color: #409eff;
-      background-color: #ecf5ff;
-      border-bottom: 3px solid #409eff;
+      color: var(--el-color-primary);
+      background-color: color-mix(in srgb, var(--el-color-primary) 12%, #ffffff);
+      border: 1px solid color-mix(in srgb, var(--el-color-primary) 22%, transparent);
+      font-weight: 600;
     }
   }
 
   .content-wrapper {
     flex: 1;
     overflow: auto;
-    padding: 16px 20px;
+    padding: 16px 16px 20px;
   }
 }
 </style>

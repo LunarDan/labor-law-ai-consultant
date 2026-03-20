@@ -3,16 +3,13 @@ import { ref, computed } from 'vue'
 import type { UserInfo, UserType } from '@/types'
 
 export const useAuthStore = defineStore('auth', () => {
-  // 记住我的登录状态（需要先读取，用于后续判断）
+  // 记住我的登录状态
   const rememberMe = ref<boolean>(localStorage.getItem('rememberMe') === 'true')
 
-  // 使用 sessionStorage 标记当前会话是否已初始化
-  // 如果没有这个标记，说明是重新打开浏览器（新会话）
+  // 标记当前会话是否已初始化
   const sessionInitialized = sessionStorage.getItem('sessionInitialized')
 
-  // 只在重新打开浏览器时才检查"记住我"状态
   if (!sessionInitialized) {
-    // 如果没有勾选"记住我"，清除所有登录数据
     if (!rememberMe.value && localStorage.getItem('token')) {
       localStorage.removeItem('token')
       localStorage.removeItem('refreshToken')
@@ -26,7 +23,7 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string>(localStorage.getItem('token') || '')
   const refreshToken = ref<string>(localStorage.getItem('refreshToken') || '')
 
-  // 从 localStorage 恢复 userInfo（安全解析）
+  // 从 localStorage 恢复 userInfo
   const storedUserInfo = localStorage.getItem('userInfo')
   let parsedUserInfo: UserInfo | null = null
   if (storedUserInfo && storedUserInfo !== 'undefined' && storedUserInfo !== 'null') {

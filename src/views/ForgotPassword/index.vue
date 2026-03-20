@@ -150,7 +150,6 @@ const rules = reactive<FormRules<ForgotPasswordForm>>({
 })
 
 // 获取验证码
-// 注意：验证码有效时间为2分钟（从发送验证码开始计算）
 const getVerificationCode = async () => {
   if (!form.phone) {
     ElMessage.warning('请输入手机号')

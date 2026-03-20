@@ -19,7 +19,7 @@ export default defineConfig(({ mode }): UserConfig => {
       open: true,
       proxy: {
         '/api': {
-          target: env.VITE_PROXY_TARGET || 'http://8.134.200.160:611',
+          target: env.VITE_PROXY_TARGET || 'http://8.134.200.160:2611',
           changeOrigin: true,
           secure: false,
           // 开发环境日志
