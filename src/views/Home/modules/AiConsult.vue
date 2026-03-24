@@ -611,10 +611,14 @@ async function callAiConsult(question: string): Promise<void> {
     currentConversationId.value = generateConversationId()
   }
 
+  // AI 咨询接口要求 userType 只能是 0/1：
+  // 0 表示个人用户，1 表示企业用户。
+  const aiConsultUserType: 0 | 1 = authStore.userType === '2' ? 1 : 0
+
   // 构建请求参数
   const requestData: ChatConsultRequest = {
     id: authStore.userInfo.id as number, // id 现在是 number 类型
-    userType: authStore.userType === '1' ? 1 : 2,
+    userType: aiConsultUserType,
     conversationId: currentConversationId.value,
     message: question,
   }

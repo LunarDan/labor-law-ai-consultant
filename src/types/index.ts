@@ -101,7 +101,7 @@ export interface UpdateUsernameRequest {
 // AI 聊天请求
 export interface ChatConsultRequest {
   id: number
-  userType: number
+  userType: 0 | 1
   conversationId: string
   message: string
 }
